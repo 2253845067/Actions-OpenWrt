@@ -1,39 +1,70 @@
-**English** | [中文](https://p3terx.com/archives/build-openwrt-with-github-actions.html)
+# Openwrt 定制固件
 
-# Actions-OpenWrt
+# 目录
 
-[![LICENSE](https://img.shields.io/github/license/mashape/apistatus.svg?style=flat-square&label=LICENSE)](https://github.com/P3TERX/Actions-OpenWrt/blob/master/LICENSE)
-![GitHub Stars](https://img.shields.io/github/stars/P3TERX/Actions-OpenWrt.svg?style=flat-square&label=Stars&logo=github)
-![GitHub Forks](https://img.shields.io/github/forks/P3TERX/Actions-OpenWrt.svg?style=flat-square&label=Forks&logo=github)
+[一、简介](#一简介)
 
-A template for building OpenWrt with GitHub Actions
+[二、源代码地址 ](#二源代码地址)
 
-## Usage
+[三、固件](#三固件)
 
-- Click the [Use this template](https://github.com/P3TERX/Actions-OpenWrt/generate) button to create a new repository.
-- Generate `.config` files using [Lean's OpenWrt](https://github.com/coolsnowwolf/lede) source code. ( You can change it through environment variables in the workflow file. )
-- Push `.config` file to the GitHub repository.
-- Select `Build OpenWrt` on the Actions page.
-- Click the `Run workflow` button.
-- When the build is complete, click the `Artifacts` button in the upper right corner of the Actions page to download the binaries.
+[四、展示](#四展示)
 
-## Tips
+[五、鸣谢](#五鸣谢)
 
-- It may take a long time to create a `.config` file and build the OpenWrt firmware. Thus, before create repository to build your own firmware, you may check out if others have already built it which meet your needs by simply [search `Actions-Openwrt` in GitHub](https://github.com/search?q=Actions-openwrt).
-- Add some meta info of your built firmware (such as firmware architecture and installed packages) to your repository introduction, this will save others' time.
+# 一、简介
 
-## Credits
+该项目从[P3TERX/Actions-OpenWrt](https://github.com/P3TERX/Actions-OpenWrt)进行定制，添加5G模块官方支持和一些常用插件
 
+# 二、源代码地址
+
+- LEDE：https://github.com/coolsnowwolf/lede
+
+# 三、固件
+
+## 功能特性
+
+- 添加5G模块官方驱动和官方拨号工具
+- 添加5G模块管理插件
+- 添加以下插件
+  - ddnsto
+  - OpenClash
+  - modem
+  - ttyd
+  - ssr-plus
+  - mosdns
+  - oled
+
+## 默认配置
+
+- IP: `http://192.168.1.1`
+- 用户名: `root`
+- 密码: `password`
+- 如果设备只有一个网口，则此网口就是 `LAN` , 如果大于一个网口, 默认第一个网口是 `WAN` 口, 其它都是 `LAN`
+- 如果要修改 `LAN` 口 `IP` , 首页有个内网设置，或者用命令 `quickstart` 修改
+- 北京时间每天 `0:00` 定时编译, `Release` 中只保留不同架构的最新版本
+- 历史版本在 `Actions` 中选择一个已经运行完成且成功的 `workflow` 在页面底部可以看到 `Artifacts`, `Artifacts` 需要登录 Github 才能下载
+
+# 四、展示
+
+暂无
+
+
+# 五、鸣谢
+
+- [istoreos](https://github.com/istoreos/istoreos)
+- [P3TERX/Actions-OpenWrt](https://github.com/P3TERX/Actions-OpenWrt)
 - [Microsoft Azure](https://azure.microsoft.com)
 - [GitHub Actions](https://github.com/features/actions)
 - [OpenWrt](https://github.com/openwrt/openwrt)
-- [coolsnowwolf/lede](https://github.com/coolsnowwolf/lede)
+- [Lean&#39;s OpenWrt](https://github.com/coolsnowwolf/lede)
+- [tmate](https://github.com/tmate-io/tmate)
+- [mxschmitt/action-tmate](https://github.com/mxschmitt/action-tmate)
+- [csexton/debugger-action](https://github.com/csexton/debugger-action)
+- [Cowtransfer](https://cowtransfer.com)
+- [WeTransfer](https://wetransfer.com/)
 - [Mikubill/transfer](https://github.com/Mikubill/transfer)
 - [softprops/action-gh-release](https://github.com/softprops/action-gh-release)
-- [Mattraks/delete-workflow-runs](https://github.com/Mattraks/delete-workflow-runs)
+- [ActionsRML/delete-workflow-runs](https://github.com/ActionsRML/delete-workflow-runs)
 - [dev-drprasad/delete-older-releases](https://github.com/dev-drprasad/delete-older-releases)
 - [peter-evans/repository-dispatch](https://github.com/peter-evans/repository-dispatch)
-
-## License
-
-[MIT](https://github.com/P3TERX/Actions-OpenWrt/blob/main/LICENSE) © [**P3TERX**](https://p3terx.com)
