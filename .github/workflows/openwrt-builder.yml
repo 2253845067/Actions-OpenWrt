@@ -16,6 +16,9 @@ on:
   repository_dispatch:
   workflow_dispatch:
 
+schedule:
+  - cron: 0 16 * * *
+
 env:
   REPO_URL: https://github.com/coolsnowwolf/lede
   REPO_BRANCH: master
@@ -23,7 +26,7 @@ env:
   CONFIG_FILE: .config
   DIY_P1_SH: diy-part1.sh
   DIY_P2_SH: diy-part2.sh
-  UPLOAD_BIN_DIR: false
+  UPLOAD_BIN_DIR: true
   UPLOAD_FIRMWARE: true
   UPLOAD_RELEASE: true
   TZ: Asia/Shanghai
@@ -33,44 +36,71 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - name: Checkout
+    - name: 准备完成
       uses: actions/checkout@main
 
-    - name: Initialization environment
+    - name: 检查服务器配置
+      run: |
+        echo "若分配的服务器性能不足，务必及时取消，重新运行！"
+        echo -e "------------------------------- CPU信息 -------------------------------\n"
+        echo "CPU物理数量:$(cat /proc/cpuinfo| grep "physical id"| sort| uniq| wc -l)"
+        echo -e "CPU核心及版本信息: $(cat /proc/cpuinfo | grep name | cut -f2 -d: | uniq -c) \n"
+        echo -e "------------------------------- 内存信息 -------------------------------\n"
+        echo "已安装内存详细信息: "
+        sudo lshw -short -C memory | grep GiB
+        echo -e "\n"
+        echo -e "------------------------------- 磁盘信息 -------------------------------\n"
+        echo -e "磁盘数量: $(ls /dev/sd* | grep -v [1-9] | wc -l) \n"
+        echo "------------------------------- 磁盘详情 -------------------------------\n"
+        df -Th
+
+    - name: 初始化编译环境
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
+        echo "------------------------------- 更新并安装依赖 -------------------------------"
         sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
         sudo docker image prune --all --force
         sudo -E apt-get -qq update
         sudo -E apt-get -qq install ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp ninja-build p7zip p7zip-full patch pkgconf python2.7 python3 python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
+        echo "------------------------------- 清理Docker镜像和软件 -------------------------------"
+        sudo docker image prune --all --force
+        sudo -E apt-get -y purge azure-cli ghc* zulu* llvm* firefox google* dotnet* powershell openjdk* mysql* php* mongodb* dotnet* moby* snapd* android* || true
         sudo -E apt-get -qq autoremove --purge
         sudo -E apt-get -qq clean
+        echo "------------------------------- 设置工作目录及时区 -------------------------------"
         sudo timedatectl set-timezone "$TZ"
         sudo mkdir -p /workdir
         sudo chown $USER:$GROUPS /workdir
 
-    - name: Clone source code
+    - name: 克隆源码
       working-directory: /workdir
       run: |
         df -hT $PWD
         git clone $REPO_URL -b $REPO_BRANCH openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
-    - name: Load custom feeds
+    - name: 缓存构建动作
+      uses: klever1988/cachewrtbuild@main
+      with:
+        ccache: 'true'
+        mixkey: ${{ matrix.os }}-${{ matrix.ARCHITECTURE }}-${{ matrix.REPO_BRANCH }}
+        prefix: ${{ github.workspace }}/openwrt
+
+    - name: 加载自定义 feeds
       run: |
         [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
         chmod +x $DIY_P1_SH
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P1_SH
 
-    - name: Update feeds
+    - name: 更新 feeds
       run: cd openwrt && ./scripts/feeds update -a
 
-    - name: Install feeds
+    - name: 安装 feeds
       run: cd openwrt && ./scripts/feeds install -a
 
-    - name: Load custom configuration
+    - name: 加载自定义配置
       run: |
         [ -e files ] && mv files openwrt/files
         [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
@@ -78,7 +108,7 @@ jobs:
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P2_SH
 
-    - name: Download package
+    - name: 下载软件包
       id: package
       run: |
         cd openwrt
@@ -87,7 +117,7 @@ jobs:
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
 
-    - name: Compile the firmware
+    - name: 编译固件
       id: compile
       run: |
         cd openwrt
@@ -98,18 +128,18 @@ jobs:
         [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
         echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
 
-    - name: Check space usage
+    - name: 检查磁盘空间
       if: (!cancelled())
       run: df -hT
 
-    - name: Upload bin directory
+    - name: 上传 bin 文件夹
       uses: actions/upload-artifact@main
       if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
       with:
         name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
         path: openwrt/bin
 
-    - name: Organize files
+    - name: 整理固件文件
       id: organize
       if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
       run: |
@@ -118,14 +148,14 @@ jobs:
         echo "FIRMWARE=$PWD" >> $GITHUB_ENV
         echo "status=success" >> $GITHUB_OUTPUT
 
-    - name: Upload firmware directory
+    - name: 上传固件目录
       uses: actions/upload-artifact@main
       if: steps.organize.outputs.status == 'success' && !cancelled()
       with:
         name: OpenWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
         path: ${{ env.FIRMWARE }}
 
-    - name: Generate release tag
+    - name: 生成发布标签
       id: tag
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       run: |
@@ -134,7 +164,7 @@ jobs:
         [ ${UPLOAD_GOFILE} = true && ${{ steps.gofile.outputs.url }} ] && echo "🔗 [GoFile](${{ steps.gofile.outputs.url }})" >> release.txt
         echo "status=success" >> $GITHUB_OUTPUT
 
-    - name: Upload firmware to release
+    - name: 自动发布固件到 Releases
       uses: softprops/action-gh-release@master
       if: steps.tag.outputs.status == 'success' && !cancelled()
       env:
@@ -144,13 +174,13 @@ jobs:
         body_path: release.txt
         files: ${{ env.FIRMWARE }}/*
 
-    - name: Delete workflow runs
+    - name: 删除运行记录
       uses: Mattraks/delete-workflow-runs@main
       with:
         retain_days: 0
         keep_minimum_runs: 2
 
-    - name: Remove old Releases
+    - name: 删除自动发布的旧固件
       uses: dev-drprasad/delete-older-releases@master
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       with:
