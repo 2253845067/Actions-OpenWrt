@@ -31,7 +31,6 @@ git clone https://github.com/kenzok8/golang feeds/packages/lang/golang
 rm -rf feeds/smpackage/{base-files,dnsmasq,firewall*,fullconenat,libnftnl,nftables,ppp,opkg,ucl,upx,vsftpd-alt,miniupnpd-iptables,wireless-regdb}
 
 # 下载openclash内核
-# git clone --depth=1 https://github.com/2253845067/Openclash-core feeds/smpackage/luci-app-openclash/root/etc/openclash/core
 mkdir -p feeds/smpackage/luci-app-openclash/root/etc/openclash/core/clash/
 mkdir -p feeds/smpackage/luci-app-openclash/root/etc/openclash/core/clash_tun/
 mkdir -p feeds/smpackage/luci-app-openclash/root/etc/openclash/core/clash_meta/
