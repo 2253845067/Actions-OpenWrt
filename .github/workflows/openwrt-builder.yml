@@ -84,6 +84,8 @@ jobs:
         df -hT $PWD
         git clone $REPO_URL -b $REPO_BRANCH openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+        VERSION_INFO=$(git show -s --date=short --format="作者: %an<br/>时间: %cd<br/>内容: %s<br/>hash: %H")
+        echo "VERSION_INFO=$VERSION_INFO" >> $GITHUB_ENV
 
     - name: 缓存构建动作
       uses: klever1988/cachewrtbuild@main
@@ -167,17 +169,17 @@ jobs:
         touch release.txt
         [ ${UPLOAD_GOFILE} = true && ${{ steps.gofile.outputs.url }} ] && echo "🔗 [GoFile](${{ steps.gofile.outputs.url }})" >> release.txt
         echo "
-        📂 源码: ${{ env.REPO_URL }}
-
-        🌳 分支: ${{ env.REPO_BRANCH }}
-
-        ⏱️ 编译时间: $(date +"%Y年%m月%d日%H时%M分")
-
-        🌐 管理地址: 192.168.1.1
-
-        👤 用户名: root
-
-        🔒 密码: password " >> release.txt
+        ### 📒 固件信息(5.15内核)
+        - 📂 源码: ${{ env.REPO_URL }}
+        - 🌳 分支: ${{ env.REPO_BRANCH }}
+        - ⏱️ 编译时间: $(date +"%Y年%m月%d日%H时%M分")
+        - 🌐 管理地址: 192.168.1.1
+        - 👤 用户名: root
+        - 🔒 密码: password 
+        ### 🧊 固件版本
+        - 固件编译前最后一次➦[主源码](${{ env.REPO_URL }})更新记录
+        - ${{ env.VERSION_INFO }}
+        " >> release.txt
         echo "status=success" >> $GITHUB_OUTPUT
 
     - name: 自动发布固件到 Releases
