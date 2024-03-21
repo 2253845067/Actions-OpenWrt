@@ -31,5 +31,11 @@ git clone https://github.com/kenzok8/golang feeds/packages/lang/golang
 rm -rf feeds/smpackage/{base-files,dnsmasq,firewall*,fullconenat,libnftnl,nftables,ppp,opkg,ucl,upx,vsftpd-alt,miniupnpd-iptables,wireless-regdb}
 
 # 下载openclash内核
-chmod -R a+x $GITHUB_WORKSPACE/scripts/preset-clash-core.sh
-$GITHUB_WORKSPACE/scripts/preset-clash-core.sh arm64
+mkdir -p feeds/smpackage/luci-app-openclash/root/etc/openclash/core/clash/
+mkdir -p feeds/smpackage/luci-app-openclash/root/etc/openclash/core/clash_tun/
+mkdir -p feeds/smpackage/luci-app-openclash/root/etc/openclash/core/clash_meta/
+wget -qO- https://raw.githubusercontent.com/vernesong/OpenClash/core/master/dev/clash-linux-arm64.tar.gz | tar xvz -C feeds/smpackage/luci-app-openclash/root/etc/openclash/core/clash/
+wget -qO- https://raw.githubusercontent.com/vernesong/OpenClash/core/master/premium/clash-linux-arm64-2023.08.17-13-gdcc8d87.gz | gunzip -c > feeds/smpackage/luci-app-openclash/root/etc/openclash/core/clash_tun/clash
+wget -qO- https://raw.githubusercontent.com/vernesong/OpenClash/core/master/meta/clash-linux-arm64.tar.gz | tar xvz -C feeds/smpackage/luci-app-openclash/root/etc/openclash/core/clash_meta/
+wget -qO- https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat > feeds/smpackage/luci-app-openclash/root/etc/openclash/GeoIP.dat
+wget -qO- https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat > feeds/smpackage/luci-app-openclash/root/etc/openclash/GeoSite.dat
