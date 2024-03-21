@@ -1,0 +1,45 @@
+
+name: delete-workflow
+
+permissions:
+  contents: write
+  actions: write
+
+on:
+  repository_dispatch:
+  workflow_dispatch:
+
+env:
+  REPO_URL: https://github.com/coolsnowwolf/lede
+  REPO_BRANCH: master
+  FEEDS_CONF: feeds.conf.default
+  CONFIG_FILE: .config
+  DIY_P1_SH: diy-part1.sh
+  DIY_P2_SH: diy-part2.sh
+  UPLOAD_BIN_DIR: true
+  UPLOAD_FIRMWARE: true
+  UPLOAD_RELEASE: true
+  TZ: Asia/Shanghai
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: 删除运行记录
+      uses: Mattraks/delete-workflow-runs@main
+      with:
+        retain_days: 0
+        keep_minimum_runs: 2
+
+    # 使用Personal Access Token (PAT)：考虑使用拥有更高权限的Personal Access Token代替GITHUB_TOKEN。创建PAT时，确保它至少拥有repo的权限，这样它就可以管理仓库的工作流。请注意，将PAT存储在GitHub Secrets中，并在工作流中通过secrets引用它，以保持安全性。
+    #- name: 删除运行记录
+    #  uses: Mattraks/delete-workflow-runs@main
+    #  with:
+    #    token: ${{ secrets.YOUR_PAT_SECRET_NAME }}
+    #    retain_days: 0
+    #    keep_minimum_runs: 2
+    # 在这个示例中，YOUR_PAT_SECRET_NAME是你在仓库的Settings -> Secrets中创建的含有你的Personal Access Token的Secret的名称。
+
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

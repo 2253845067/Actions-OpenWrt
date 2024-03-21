@@ -14,6 +14,7 @@ name: OpenWrt Builder
 
 permissions:
   contents: write
+  actions: write
 
 on:
   repository_dispatch:
@@ -181,6 +182,15 @@ jobs:
       with:
         retain_days: 0
         keep_minimum_runs: 2
+
+    # 使用Personal Access Token (PAT)：考虑使用拥有更高权限的Personal Access Token代替GITHUB_TOKEN。创建PAT时，确保它至少拥有repo的权限，这样它就可以管理仓库的工作流。请注意，将PAT存储在GitHub Secrets中，并在工作流中通过secrets引用它，以保持安全性。
+    #- name: 删除运行记录
+    #  uses: Mattraks/delete-workflow-runs@main
+    #  with:
+    #    token: ${{ secrets.YOUR_PAT_SECRET_NAME }}
+    #    retain_days: 0
+    #    keep_minimum_runs: 2
+    # 在这个示例中，YOUR_PAT_SECRET_NAME是你在仓库的Settings -> Secrets中创建的含有你的Personal Access Token的Secret的名称。
 
     - name: 删除自动发布的旧固件
       uses: dev-drprasad/delete-older-releases@master
