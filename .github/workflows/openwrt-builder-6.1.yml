@@ -100,7 +100,7 @@ jobs:
         $GITHUB_WORKSPACE/$DIY_P1_SH
 
     - name: 更新 feeds
-      run: cd openwrt && ./scripts/feeds update -a
+      run: cd openwrt && ./scripts/feeds update -a && sed -i 's/+kmod-pcie_mhi/ /g' package/Modem-Support/luci-app-modem/Makefile
 
     - name: 安装 feeds
       run: cd openwrt && ./scripts/feeds install -a
