@@ -163,7 +163,7 @@ jobs:
       id: tag
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       run: |
-        echo "release_tag=$(date +"%Y.%m.%d-%H%M")-kernel(5.15)" >> $GITHUB_OUTPUT
+        echo "release_tag=Openwrt-kernel(5.15)" >> $GITHUB_OUTPUT
         touch release.txt
         [ ${UPLOAD_GOFILE} = true && ${{ steps.gofile.outputs.url }} ] && echo "🔗 [GoFile](${{ steps.gofile.outputs.url }})" >> release.txt
         echo "
@@ -196,7 +196,7 @@ jobs:
       uses: Mattraks/delete-workflow-runs@main
       with:
         retain_days: 0
-        keep_minimum_runs: 4
+        keep_minimum_runs: 6
 
     - name: 删除自动发布的旧固件
       uses: dev-drprasad/delete-older-releases@master
