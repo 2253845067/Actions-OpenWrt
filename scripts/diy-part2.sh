@@ -23,4 +23,3 @@
 sed -i '/HOST_CONFIGURE_ARGS/ s/--disable-shared/--enable-shared/' feeds/packages/libs/libxml2/Makefile
 sed -i '/HOST_CONFIGURE_ARGS/ a--with-libxml-libs-prefix=$(STAGING_DIR_HOSTPKG)/lib' feeds/packages/libs/libxslt/Makefile
 sed -i '/HOST_CONFIGURE_ARGS/ a--with-libxml-include-prefix=$(STAGING_DIR_HOSTPKG)/include/libxml2/' feeds/packages/libs/libxslt/Makefile
-sed -i 's|LIBXML_LIBS =|LIBXML_LIBS = -lxml2 -L$(STAGING_DIR_HOSTPKG)/lib|' build_dir/hostpkg/libxslt-1.1.34/xsltproc/Makefile
