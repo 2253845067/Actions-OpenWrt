@@ -16,15 +16,13 @@
 ## 功能特性
 
 - 添加5G模块官方驱动和官方拨号工具
-- 添加5G模块管理插件
+- 添加5G模块管理插件（移动通信模组）
 - 添加以下插件
-  - ddnsto
+  - ShadowSocksR Plus+
+  - DDNSTO 远程控制
+  - MosDNS
   - OpenClash
-  - modem
-  - ttyd
-  - ssr-plus
-  - mosdns
-  - oled
+  - OLED
 
 ## 默认配置
 
@@ -35,7 +33,9 @@
 
 # 四、展示
 
-暂无
+![](/img/Snipaste_2024-03-24_15-19-50.png)
+![](/img/Snipaste_2024-03-24_15-20-22.png)
+![](/img/Snipaste_2024-03-24_15-20-29.png)
 
 
 # 五、鸣谢
