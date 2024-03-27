@@ -98,9 +98,12 @@ jobs:
         cd openwrt
         sed -i 's/5.15/6.1/g' target/linux/rockchip/Makefile
         $GITHUB_WORKSPACE/$DIY_P1_SH
+        sed -i 's/+kmod-pcie_mhi/ /g' package/Modem-Support/luci-app-modem/Makefile
+        rm -rf package/kernel/mt76
+        git clone --depth=1 https://github.com/2253845067/mt76 package/kernel/mt76
 
     - name: 更新 feeds
-      run: cd openwrt && ./scripts/feeds update -a && sed -i 's/+kmod-pcie_mhi/ /g' package/Modem-Support/luci-app-modem/Makefile
+      run: cd openwrt && ./scripts/feeds update -a
 
     - name: 安装 feeds
       run: cd openwrt && ./scripts/feeds install -a
