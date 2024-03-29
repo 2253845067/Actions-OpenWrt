@@ -10,7 +10,7 @@
 # See /LICENSE for more information.
 #
 
-name: OpenWrt Builder 5.15
+name: OpenWrt Builder
 
 # 给工作流设置权限
 permissions:
@@ -170,8 +170,6 @@ jobs:
         📂 源码: ${{ env.REPO_URL }}
 
         🌳 分支: ${{ env.REPO_BRANCH }}
-
-        💻 内核：5.15
 
         ⏱️ 编译时间: $(date +"%Y年%m月%d日%H时%M分")
 
