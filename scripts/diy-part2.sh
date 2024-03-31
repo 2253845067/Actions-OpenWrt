@@ -20,6 +20,6 @@
 #sed -i 's/OpenWrt/P3TERX-Router/g' package/base-files/files/bin/config_generate
 
 # 解决编译libxlts（host）不通过
-sed -i '/HOST_CONFIGURE_ARGS/ s/--disable-shared/--enable-shared/' feeds/packages/libs/libxml2/Makefile
-sed -i '/HOST_CONFIGURE_ARGS/ a--with-libxml-libs-prefix=$(STAGING_DIR_HOSTPKG)/lib' feeds/packages/libs/libxslt/Makefile
-sed -i '/HOST_CONFIGURE_ARGS/ a--with-libxml-include-prefix=$(STAGING_DIR_HOSTPKG)/include/libxml2/' feeds/packages/libs/libxslt/Makefile
+#sed -i '/HOST_CONFIGURE_ARGS/ s/--disable-shared/--enable-shared/' feeds/packages/libs/libxml2/Makefile
+#sed -i '/HOST_CONFIGURE_ARGS/ a--with-libxml-libs-prefix=$(STAGING_DIR_HOSTPKG)/lib' feeds/packages/libs/libxslt/Makefile
+#sed -i '/HOST_CONFIGURE_ARGS/ a--with-libxml-include-prefix=$(STAGING_DIR_HOSTPKG)/include/libxml2/' feeds/packages/libs/libxslt/Makefile
