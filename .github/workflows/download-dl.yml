@@ -136,7 +136,6 @@ jobs:
 
     - name: 上传 dl 文件夹
       uses: actions/upload-artifact@main
-      if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
       with:
-        name: OpenWrt_dl${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
+        name: OpenWrt_dl
         path: openwrt/dl
