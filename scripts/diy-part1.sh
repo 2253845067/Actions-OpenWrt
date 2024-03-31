@@ -20,8 +20,11 @@
 # 添加5G
 #git clone --depth=1 https://github.com/Siriling/5G-Modem-Support package/Modem-Support
 
-#注释掉pcie_mhi
+#注释掉部分依赖
 #sed -i 's/+kmod-pcie_mhi/ /g' package/Modem-Support/luci-app-modem/Makefile
+sed -i 's/+modemmanager / /g' feeds/Support/luci-app-modem/Makefile
+sed -i 's/+luci-proto-modemmanager / /g' feeds/Support/luci-app-modem/Makefile
+
 
 # 添加风扇
 #git clone --depth=1 https://github.com/2253845067/h69k-fanctrl package/h69k-fanctrl
