@@ -18,7 +18,7 @@
 #echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall' >>feeds.conf.default
 
 # 添加5G
-#git clone --depth=1 https://github.com/Siriling/5G-Modem-Support package/Modem-Support
+git clone --depth=1 https://github.com/Siriling/5G-Modem-Support package/Modem-Support
 
 #注释掉部分依赖
 #sed -i 's/+kmod-pcie_mhi/ /g' package/Modem-Support/luci-app-modem/Makefile
@@ -27,7 +27,7 @@
 
 
 # 添加风扇
-#git clone --depth=1 https://github.com/2253845067/h69k-fanctrl package/h69k-fanctrl
+git clone --depth=1 https://github.com/2253845067/h69k-fanctrl package/h69k-fanctrl
 
 # small大佬常用OpenWrt软件包源码合集处理
 ./scripts/feeds update -a && rm -rf feeds/luci/applications/luci-app-mosdns
