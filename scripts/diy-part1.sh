@@ -46,5 +46,5 @@ wget -qO- https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/downlo
 
 
 # MT7916 160mhz修复
-#rm -rf package/kernel/mt76
-#git clone --depth=1 https://github.com/2253845067/mt76 package/kernel/mt76
+rm -rf package/kernel/mt76
+git clone --depth=1 https://github.com/2253845067/mt76 package/kernel/mt76
