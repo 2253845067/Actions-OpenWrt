@@ -19,6 +19,3 @@
 # Modify hostname
 #sed -i 's/OpenWrt/P3TERX-Router/g' package/base-files/files/bin/config_generate
 
-# 解决编译libxlts（host）不通过
-wget -qO- https://github.com/immortalwrt/immortalwrt/blob/master/package/libs/libxml2/Makefile > feeds/packages/libs/libxml2/Makefile
-wget -qO- https://github.com/immortalwrt/packages/blob/master/libs/libxslt/Makefile > feeds/packages/libs/libxslt/Makefile

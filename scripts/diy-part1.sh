@@ -20,20 +20,12 @@
 # 添加5G
 git clone --depth=1 https://github.com/Siriling/5G-Modem-Support package/Modem-Support
 
-#注释掉部分依赖
-#sed -i 's/+kmod-pcie_mhi/ /g' package/Modem-Support/luci-app-modem/Makefile
-#sed -i 's/+modemmanager / /g' feeds/Support/luci-app-modem/Makefile
-#sed -i 's/+luci-proto-modemmanager / /g' feeds/Support/luci-app-modem/Makefile
-
-
 # 添加风扇
 git clone --depth=1 https://github.com/2253845067/h69k-fanctrl package/h69k-fanctrl
 
 # small大佬常用OpenWrt软件包源码合集处理
 ./scripts/feeds update -a && rm -rf feeds/luci/applications/luci-app-mosdns
 rm -rf feeds/packages/net/{alist,adguardhome,xray*,v2ray*,v2ray*,sing*,smartdns}
-#rm -rf feeds/packages/lang/golang
-#git clone https://github.com/kenzok8/golang feeds/packages/lang/golang
 rm -rf feeds/smpackage/{base-files,dnsmasq,firewall*,fullconenat,libnftnl,nftables,ppp,opkg,ucl,upx,vsftpd-alt,miniupnpd-iptables,wireless-regdb,sms-tool,luci-app-sms-tool}
 
 # 下载openclash内核
@@ -44,7 +36,10 @@ wget -qO- https://raw.githubusercontent.com/vernesong/OpenClash/core/master/meta
 wget -qO- https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat > feeds/smpackage/luci-app-openclash/root/etc/openclash/GeoIP.dat
 wget -qO- https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat > feeds/smpackage/luci-app-openclash/root/etc/openclash/GeoSite.dat
 
-
 # MT7916 160mhz修复
 rm -rf package/kernel/mt76
 git clone --depth=1 https://github.com/2253845067/mt76 package/kernel/mt76
+
+# 解决编译libxlts（host）不通过
+wget -qO- https://github.com/immortalwrt/immortalwrt/blob/master/package/libs/libxml2/Makefile > feeds/packages/libs/libxml2/Makefile
+wget -qO- https://github.com/immortalwrt/packages/blob/master/libs/libxslt/Makefile > feeds/packages/libs/libxslt/Makefile
