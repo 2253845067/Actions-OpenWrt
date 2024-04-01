@@ -22,8 +22,8 @@
 
 #注释掉部分依赖
 #sed -i 's/+kmod-pcie_mhi/ /g' package/Modem-Support/luci-app-modem/Makefile
-sed -i 's/+modemmanager / /g' feeds/Support/luci-app-modem/Makefile
-sed -i 's/+luci-proto-modemmanager / /g' feeds/Support/luci-app-modem/Makefile
+#sed -i 's/+modemmanager / /g' feeds/Support/luci-app-modem/Makefile
+#sed -i 's/+luci-proto-modemmanager / /g' feeds/Support/luci-app-modem/Makefile
 
 
 # 添加风扇
