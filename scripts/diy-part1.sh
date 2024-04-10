@@ -44,6 +44,5 @@ wget -qO- https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/downlo
 rm -rf package/kernel/mt76
 git clone --depth=1 https://github.com/2253845067/mt76 package/kernel/mt76
 
-# 解决编译libxlts（host）不通过
-#wget -qO- https://github.com/immortalwrt/immortalwrt/blob/master/package/libs/libxml2/Makefile > feeds/packages/libs/libxml2/Makefile
-#wget -qO- https://github.com/immortalwrt/packages/blob/master/libs/libxslt/Makefile > feeds/packages/libs/libxslt/Makefile
+# 解决编译U-BOOT失败
+wget -qO- https://github.com/coolsnowwolf/lede/files/14896014/318-revert-Use-importlib-to-find-the-help.patch /package/boot/uboot-rockchip/patches/318-revert-Use-importlib-to-find-the-help.patch
