@@ -21,7 +21,7 @@
 git clone --depth=1 https://github.com/Siriling/5G-Modem-Support package/Modem-Support
 
 # 注释掉+modemmanager，+luci-proto-modemmanager，+kmod-pcie_mhi
-sed -i 's/+modemmanager//g; s/+luci-proto-modemmanager//g; s/+kmod-pcie_mhi//g' package/Modem-Support/luci-app-modem/Makefile
+# sed -i 's/+modemmanager//g; s/+luci-proto-modemmanager//g; s/+kmod-pcie_mhi//g' package/Modem-Support/luci-app-modem/Makefile
 
 # 添加风扇
 git clone --depth=1 https://github.com/2253845067/h69k-fanctrl package/h69k-fanctrl
