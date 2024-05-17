@@ -94,6 +94,7 @@ jobs:
         [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
         chmod +x $DIY_P1_SH
         cd openwrt
+        sed -i 's/6.1/5.15/g' target/linux/rockchip/Makefile
         $GITHUB_WORKSPACE/$DIY_P1_SH
 
     - name: 更新 feeds
