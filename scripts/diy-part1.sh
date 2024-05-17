@@ -27,9 +27,11 @@ git clone --depth=1 https://github.com/Siriling/5G-Modem-Support package/Modem-S
 git clone --depth=1 https://github.com/2253845067/h69k-fanctrl package/h69k-fanctrl
 
 # small大佬常用OpenWrt软件包源码合集处理
-./scripts/feeds update -a && rm -rf feeds/luci/applications/luci-app-mosdns
-rm -rf feeds/packages/net/{alist,adguardhome,xray*,v2ray*,v2ray*,sing*,smartdns}
-rm -rf feeds/smpackage/{base-files,dnsmasq,firewall*,fullconenat,libnftnl,nftables,ppp,opkg,ucl,upx,vsftpd-alt,miniupnpd-iptables,wireless-regdb,sms-tool,luci-app-sms-tool}
+#./scripts/feeds update -a && rm -rf feeds/luci/applications/luci-app-mosdns
+#rm -rf feeds/packages/net/{alist,adguardhome,xray*,v2ray*,v2ray*,sing*,smartdns}
+#rm -rf feeds/smpackage/{base-files,dnsmasq,firewall*,fullconenat,libnftnl,nftables,ppp,opkg,ucl,upx,vsftpd-alt,miniupnpd-iptables,wireless-regdb,sms-tool,luci-app-sms-tool}
+
+rm -rf package/Modem-Support/{rooter,luci-app-sms-tool,sms-tool}
 
 # 下载openclash内核
 mkdir -p feeds/smpackage/luci-app-openclash/root/etc/openclash/core/
@@ -46,5 +48,5 @@ wget -qO- https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/downlo
 #fi
 
 # MT7916 160mhz修复
-rm -rf package/kernel/mt76
-git clone --depth=1 https://github.com/2253845067/mt76 package/kernel/mt76
+#rm -rf package/kernel/mt76
+#git clone --depth=1 https://github.com/2253845067/mt76 package/kernel/mt76
