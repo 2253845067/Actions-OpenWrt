@@ -41,6 +41,7 @@ wget -qO- https://raw.githubusercontent.com/vernesong/OpenClash/core/master/prem
 wget -qO- https://raw.githubusercontent.com/vernesong/OpenClash/core/master/meta/clash-linux-arm64.tar.gz | tar xOvz > feeds/smpackage/luci-app-openclash/root/etc/openclash/core/clash_meta
 wget -qO- https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat > feeds/smpackage/luci-app-openclash/root/etc/openclash/GeoIP.dat
 wget -qO- https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat > feeds/smpackage/luci-app-openclash/root/etc/openclash/GeoSite.dat
+chmod +x feeds/smpackage/luci-app-openclash/root/etc/openclash/core/clash*
 
 # MT7916 160mhz修复 （6.1内核下才需要使用）
 #rm -rf package/kernel/mt76
