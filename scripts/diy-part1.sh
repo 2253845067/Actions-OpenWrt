@@ -42,12 +42,6 @@ wget -qO- https://raw.githubusercontent.com/vernesong/OpenClash/core/master/meta
 wget -qO- https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat > feeds/smpackage/luci-app-openclash/root/etc/openclash/GeoIP.dat
 wget -qO- https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat > feeds/smpackage/luci-app-openclash/root/etc/openclash/GeoSite.dat
 
-# 加入OpenClash核心
-chmod -R a+x $GITHUB_WORKSPACE/scripts/preset-clash-core.sh
-if [ 1 = 1 ]; then
-    $GITHUB_WORKSPACE/preset-clash-core.sh arm64
-fi
-
 # MT7916 160mhz修复 （6.1内核下才需要使用）
 #rm -rf package/kernel/mt76
 #git clone --depth=1 https://github.com/2253845067/mt76 package/kernel/mt76
