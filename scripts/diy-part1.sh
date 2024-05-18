@@ -17,21 +17,22 @@
 #echo 'src-git helloworld https://github.com/fw876/helloworld' >>feeds.conf.default
 #echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall' >>feeds.conf.default
 
+# 切换5.15内核编译
+sed -i 's/6.1/5.15/g' target/linux/rockchip/Makefile
+
 # 添加5G
 git clone --depth=1 https://github.com/Siriling/5G-Modem-Support package/Modem-Support
 
-# 注释掉+modemmanager，+luci-proto-modemmanager，+kmod-pcie_mhi
-# sed -i 's/+modemmanager//g; s/+luci-proto-modemmanager//g; s/+kmod-pcie_mhi//g' package/Modem-Support/luci-app-modem/Makefile
+# 删除部分插件
+rm -rf package/Modem-Support/{rooter,luci-app-sms-tool,sms-tool}
 
 # 添加风扇
 git clone --depth=1 https://github.com/2253845067/h69k-fanctrl package/h69k-fanctrl
 
-# small大佬常用OpenWrt软件包源码合集处理
-#./scripts/feeds update -a && rm -rf feeds/luci/applications/luci-app-mosdns
-#rm -rf feeds/packages/net/{alist,adguardhome,xray*,v2ray*,v2ray*,sing*,smartdns}
-#rm -rf feeds/smpackage/{base-files,dnsmasq,firewall*,fullconenat,libnftnl,nftables,ppp,opkg,ucl,upx,vsftpd-alt,miniupnpd-iptables,wireless-regdb,sms-tool,luci-app-sms-tool}
-
-rm -rf package/Modem-Support/{rooter,luci-app-sms-tool,sms-tool}
+# 添加fm350专用拨号插件
+git clone https://github.com/kiddin9/openwrt-packages
+cp -r openwrt-packages/fm350-modem/. package/Modem-Support/fm350-modem
+cp -r openwrt-packages/luci-proto-fm350/. package/Modem-Support/luci-proto-fm350
 
 # 下载openclash内核
 mkdir -p feeds/smpackage/luci-app-openclash/root/etc/openclash/core/
@@ -42,11 +43,11 @@ wget -qO- https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/downlo
 wget -qO- https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat > feeds/smpackage/luci-app-openclash/root/etc/openclash/GeoSite.dat
 
 # 加入OpenClash核心
-#chmod -R a+x $GITHUB_WORKSPACE/scripts/preset-clash-core.sh
-#if [ 1 = 1 ]; then
-#    $GITHUB_WORKSPACE/preset-clash-core.sh arm64
-#fi
+chmod -R a+x $GITHUB_WORKSPACE/scripts/preset-clash-core.sh
+if [ 1 = 1 ]; then
+    $GITHUB_WORKSPACE/preset-clash-core.sh arm64
+fi
 
-# MT7916 160mhz修复
+# MT7916 160mhz修复 （6.1内核下才需要使用）
 #rm -rf package/kernel/mt76
 #git clone --depth=1 https://github.com/2253845067/mt76 package/kernel/mt76
