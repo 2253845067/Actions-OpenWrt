@@ -30,9 +30,10 @@ rm -rf package/Modem-Support/{rooter,luci-app-sms-tool,sms-tool}
 git clone --depth=1 https://github.com/2253845067/h69k-fanctrl package/h69k-fanctrl
 
 # 添加fm350专用拨号插件
-git clone https://github.com/kiddin9/openwrt-packages
-cp -r openwrt-packages/fm350-modem/. package/Modem-Support/fm350-modem
-cp -r openwrt-packages/luci-proto-fm350/. package/Modem-Support/luci-proto-fm350
+git clone -b lede https://github.com/2253845067/modemfeed
+cp -r modemfeed/packages/net/fm350-modem/. package/Modem-Support/fm350-modem
+cp -r modemfeed/packages/net/fm350-usb-net/. package/Modem-Support/fm350-usb-net
+cp -r modemfeed/luci/protocols/luci-proto-fm350/. package/Modem-Support/luci-proto-fm350
 
 # 下载openclash内核
 mkdir -p feeds/smpackage/luci-app-openclash/root/etc/openclash/core/
