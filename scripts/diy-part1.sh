@@ -30,10 +30,10 @@ rm -rf package/Modem-Support/{rooter,luci-app-sms-tool,sms-tool}
 git clone --depth=1 https://github.com/2253845067/h69k-fanctrl package/h69k-fanctrl
 
 # 添加fm350专用拨号插件
-git clone -b lede https://github.com/2253845067/modemfeed
-cp -r modemfeed/packages/net/fm350-modem/. package/Modem-Support/fm350-modem
-cp -r modemfeed/packages/net/fm350-usb-net/. package/Modem-Support/fm350-usb-net
-cp -r modemfeed/luci/protocols/luci-proto-fm350/. package/Modem-Support/luci-proto-fm350
+# git clone -b lede https://github.com/2253845067/modemfeed
+# cp -r modemfeed/packages/net/fm350-modem/. package/Modem-Support/fm350-modem
+# cp -r modemfeed/packages/net/fm350-usb-net/. package/Modem-Support/fm350-usb-net
+# cp -r modemfeed/luci/protocols/luci-proto-fm350/. package/Modem-Support/luci-proto-fm350
 
 # 下载openclash内核
 mkdir -p feeds/smpackage/luci-app-openclash/root/etc/openclash/core/
@@ -45,5 +45,5 @@ wget -qO- https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/downlo
 chmod +x feeds/smpackage/luci-app-openclash/root/etc/openclash/core/clash*
 
 # MT7916 160mhz修复 （6.1内核下才需要使用）
-#rm -rf package/kernel/mt76
-#git clone --depth=1 https://github.com/2253845067/mt76 package/kernel/mt76
+# rm -rf package/kernel/mt76
+# git clone --depth=1 https://github.com/2253845067/mt76 package/kernel/mt76
