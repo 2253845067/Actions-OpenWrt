@@ -18,7 +18,7 @@
 #echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall' >>feeds.conf.default
 
 # 切换5.15内核编译
-sed -i 's/6.1/5.15/g' target/linux/rockchip/Makefile
+# sed -i 's/6.1/5.15/g' target/linux/rockchip/Makefile
 
 # 添加5G
 git clone --depth=1 https://github.com/Siriling/5G-Modem-Support package/Modem-Support
