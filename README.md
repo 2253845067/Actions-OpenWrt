@@ -1,7 +1,8 @@
-# Openwrt For H69K&3588AIB定制固件
+# Openwrt For 3588AIB定制固件
+
 [![最新固件下载](https://img.shields.io/github/v/release/2253845067/Actions-OpenWrt?style=flat-square&label=最新固件下载)](../../releases)
 
-![支持设备](https://img.shields.io/badge/支持设备:-blueviolet.svg?style=flat-square) ![H69K](https://img.shields.io/badge/H69K-blue.svg?style=flat-square)![3588AIB](https://img.shields.io/badge/3588AIB-blue.svg?style=flat-square)
+![支持设备](https://img.shields.io/badge/支持设备:-blueviolet.svg?style=flat-square) ![3588AIB](https://img.shields.io/badge/3588AIB-blue.svg?style=flat-square)
 
 # 一、简介
 
@@ -36,7 +37,6 @@
 ![](/img/Snipaste_2024-03-24_15-19-50.png)
 ![](/img/Snipaste_2024-03-24_15-20-22.png)
 ![](/img/Snipaste_2024-03-24_15-20-29.png)
-
 
 # 五、鸣谢
 
