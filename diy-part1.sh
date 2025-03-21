@@ -16,6 +16,7 @@
 # Add a feed source
 sed -i '$a src-git smpackage https://github.com/kenzok8/small-package' feeds.conf.default
 sed -i '$a src-git modem https://github.com/FUjr/modem_feeds.git;main' feeds.conf.default
+sed -i '$a src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main' feeds.conf.default
 # git clone https://github.com/Siriling/5G-Modem-Support package/luci-app-modem
 # git clone https://github.com/JiaY-shi/fancontrol package/fancontrol
 
