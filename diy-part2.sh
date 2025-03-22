@@ -24,13 +24,8 @@ rm -rf feeds/smpackage/{base-files,dnsmasq,firewall*,fullconenat,libnftnl,nftabl
 rm -rf feeds/luci/applications/luci-app-alist
 rm -rf feeds/luci/packages/net/alist
 
-# Download Openclash core
-# mkdir -p feeds/smpackage/luci-app-openclash/root/etc/openclash/core
-# wget -qO- https://raw.githubusercontent.com/vernesong/OpenClash/core/master/dev/clash-linux-arm64.tar.gz | tar xOvz > feeds/smpackage/luci-app-openclash/root/etc/openclash/core/clash
-# wget -qO- https://raw.githubusercontent.com/vernesong/OpenClash/core/master/meta/clash-linux-arm64.tar.gz | tar xOvz > feeds/smpackage/luci-app-openclash/root/etc/openclash/core/clash_meta
-# wget -qO- https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat > feeds/smpackage/luci-app-openclash/root/etc/openclash/GeoIP.dat
-# wget -qO- https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat > feeds/smpackage/luci-app-openclash/root/etc/openclash/GeoSite.dat
-
+rm -rf OpenClash
+rm -rf nikki
 ##---------------- OpenClash ----------------------------
 # git clone -b v0.45.141-beta --depth=1 https://github.com/vernesong/openclash.git OpenClash
 git clone --depth 1 https://github.com/vernesong/openclash.git OpenClash
@@ -70,4 +65,12 @@ mv /tmp/GeoIP.dat feeds/luci/applications/luci-app-openclash/root/etc/openclash/
 ##-------------- GeoSite 数据库 ---------------------------
 curl -sL -m 30 --retry 2 https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat -o /tmp/GeoSite.dat
 mv /tmp/GeoSite.dat feeds/luci/applications/luci-app-openclash/root/etc/openclash/GeoSite.dat >/dev/null 2>&1
+##---------------------------------------------------------
+
+##---------------- nikki ----------------------------
+git clone --depth 1 https://github.com/nikkinikki-org/OpenWrt-nikki.git nikki
+rm -rf feeds/luci/applications/luci-app-nikki
+rm -rf feeds/luci/applications/nikki
+mv nikki/luci-app-nikki feeds/luci/applications/luci-app-nikki
+mv nikki/nikki feeds/luci/applications/nikki
 ##---------------------------------------------------------
