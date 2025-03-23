@@ -25,7 +25,6 @@ rm -rf feeds/luci/applications/luci-app-alist
 rm -rf feeds/luci/packages/net/alist
 
 rm -rf OpenClash
-rm -rf nikki
 ##---------------- OpenClash ----------------------------
 # git clone -b v0.45.141-beta --depth=1 https://github.com/vernesong/openclash.git OpenClash
 git clone --depth 1 https://github.com/vernesong/openclash.git OpenClash
@@ -67,10 +66,3 @@ curl -sL -m 30 --retry 2 https://github.com/Loyalsoldier/v2ray-rules-dat/release
 mv /tmp/GeoSite.dat feeds/luci/applications/luci-app-openclash/root/etc/openclash/GeoSite.dat >/dev/null 2>&1
 ##---------------------------------------------------------
 
-##---------------- nikki ----------------------------
-git clone --depth 1 https://github.com/nikkinikki-org/OpenWrt-nikki.git nikki
-rm -rf feeds/luci/applications/luci-app-nikki
-rm -rf feeds/luci/applications/nikki
-mv nikki/luci-app-nikki feeds/luci/applications/luci-app-nikki
-mv nikki/nikki feeds/luci/applications/nikki
-##---------------------------------------------------------
