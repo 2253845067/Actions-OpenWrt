@@ -66,5 +66,7 @@ curl -sL -m 30 --retry 2 https://github.com/Loyalsoldier/v2ray-rules-dat/release
 mv /tmp/GeoSite.dat feeds/luci/applications/luci-app-openclash/root/etc/openclash/GeoSite.dat >/dev/null 2>&1
 ##---------------------------------------------------------
 
-# 关闭rust download-ci-llvm
-sed -i 's|llvm.download-ci-llvm=true|llvm.download-ci-llvm=false|g' feeds/packages/lang/rust/Makefile
+# 修复rust
+# sed -i 's|llvm.download-ci-llvm=true|llvm.download-ci-llvm=false|g' feeds/packages/lang/rust/Makefile
+wget https://github.com/openwrt/packages/commit/adcfa66a066df5e2b32d91742287b13b5a11cff2.patch
+git apply adcfa66a066df5e2b32d91742287b13b5a11cff2.patch
