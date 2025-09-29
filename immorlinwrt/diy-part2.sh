@@ -65,3 +65,6 @@ mv /tmp/GeoIP.dat feeds/luci/applications/luci-app-openclash/root/etc/openclash/
 curl -sL -m 30 --retry 2 https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat -o /tmp/GeoSite.dat
 mv /tmp/GeoSite.dat feeds/luci/applications/luci-app-openclash/root/etc/openclash/GeoSite.dat >/dev/null 2>&1
 ##---------------------------------------------------------
+
+# 关闭rust download-ci-llvm
+sed -i 's|llvm.download-ci-llvm=true|llvm.download-ci-llvm=false|g' /feeds/packages/lang/rust/Makefile
