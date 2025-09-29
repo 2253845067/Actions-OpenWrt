@@ -67,4 +67,4 @@ mv /tmp/GeoSite.dat feeds/luci/applications/luci-app-openclash/root/etc/openclas
 ##---------------------------------------------------------
 
 # 关闭rust download-ci-llvm
-sed -i 's|llvm.download-ci-llvm=true|llvm.download-ci-llvm=false|g' /feeds/packages/lang/rust/Makefile
+sed -i 's|llvm.download-ci-llvm=true|llvm.download-ci-llvm=false|g' feeds/packages/lang/rust/Makefile
