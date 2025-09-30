@@ -15,8 +15,8 @@ name: lede Builder
 on:
   repository_dispatch:
   workflow_dispatch:
-  schedule:
-    - cron: '0 18 * * *'  # 每天 UTC 时间 18:00（即北京时间 02:00）
+  # schedule:
+  #   - cron: '0 18 * * *'  # 每天 UTC 时间 18:00（即北京时间 02:00）
 
 env:
   REPO_URL: https://github.com/coolsnowwolf/lede
