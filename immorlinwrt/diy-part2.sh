@@ -72,3 +72,6 @@ cd feeds/packages
 wget https://github.com/openwrt/packages/commit/adcfa66a066df5e2b32d91742287b13b5a11cff2.patch
 git apply adcfa66a066df5e2b32d91742287b13b5a11cff2.patch
 cd ../..
+
+# qmodem强制安装以覆盖现有的驱动程序/应用
+./scripts/feeds install -a -f -p qmodem
