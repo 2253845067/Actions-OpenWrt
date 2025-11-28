@@ -76,10 +76,10 @@ mv /tmp/GeoSite.dat feeds/luci/applications/luci-app-openclash/root/etc/openclas
 
 # 修复rust
 # sed -i 's|llvm.download-ci-llvm=true|llvm.download-ci-llvm=false|g' feeds/packages/lang/rust/Makefile
-cd feeds/packages
-wget https://github.com/openwrt/packages/commit/adcfa66a066df5e2b32d91742287b13b5a11cff2.patch
-git apply adcfa66a066df5e2b32d91742287b13b5a11cff2.patch
-cd ../..
+# cd feeds/packages
+# wget https://github.com/openwrt/packages/commit/adcfa66a066df5e2b32d91742287b13b5a11cff2.patch
+# git apply adcfa66a066df5e2b32d91742287b13b5a11cff2.patch
+# cd ../..
 
 # qmodem强制安装以覆盖现有的驱动程序/应用
 ./scripts/feeds install -a -f -p qmodem
