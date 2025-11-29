@@ -83,3 +83,6 @@ mv /tmp/GeoSite.dat feeds/luci/applications/luci-app-openclash/root/etc/openclas
 
 # qmodem强制安装以覆盖现有的驱动程序/应用
 ./scripts/feeds install -a -f -p qmodem
+
+# 设置ARM64_CONTPTE选项为y
+echo "CONFIG_ARM64_CONTPTE=y" >> .config
