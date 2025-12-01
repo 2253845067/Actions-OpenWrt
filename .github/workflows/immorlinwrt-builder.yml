@@ -103,11 +103,11 @@ jobs:
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
 
-    - name: Prepare kernel defconfig (avoid NEW Kconfig prompt)
-      run: |
-        cd openwrt
-        make defconfig
-        make target/linux/prepare V=s
+    # - name: Prepare kernel defconfig (avoid NEW Kconfig prompt)
+    #   run: |
+    #     cd openwrt
+    #     make defconfig
+    #     make target/linux/prepare V=s
 
     - name: Compile the firmware
       id: compile
