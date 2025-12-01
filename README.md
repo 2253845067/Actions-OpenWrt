@@ -10,17 +10,15 @@
 
 # 二、源代码地址
 
+- immorlinwrt：https://github.com/immortalwrt/immortalwrt
 - LEDE：https://github.com/coolsnowwolf/lede
 
 # 三、固件
 
 ## 功能特性
 
-- 添加5G模块官方驱动和官方拨号工具
 - 添加5G模块管理插件（QWRT模组管理）
 - 添加以下主要插件
-  - ShadowSocksR Plus+
-  - DDNSTO 远程控制
   - OpenClash
 
 ## 默认配置
@@ -28,16 +26,17 @@
 - IP: `http://192.168.1.1`
 - 用户名: `root`
 - 密码: `password`
-- 北京时间每天 `0:00` 定时编译
+- 北京时间每天 `2:00` 定时编译
 
 # 四、展示
 
-![](/img/屏幕截图%202025-03-01%20165905.png)
-![](/img/屏幕截图%202025-03-01%20165943.png)
-![](/img/屏幕截图%202025-03-01%20170033.png)
+![](/img/Snipaste_2025-12-01_21-57-12.png)
+![](/img/Snipaste_2025-12-01_21-57-34.png)
+![](/img/Snipaste_2025-12-01_21-57-48.png)
 
 # 五、鸣谢
 
+- [immorlinwrt](https://github.com/immortalwrt/immortalwrt)
 - [Lean&#39;s OpenWrt](https://github.com/coolsnowwolf/lede)
 - [P3TERX/Actions-OpenWrt](https://github.com/P3TERX/Actions-OpenWrt)
 - [istoreos](https://github.com/istoreos/istoreos)
