@@ -84,5 +84,5 @@ mv /tmp/GeoSite.dat feeds/luci/applications/luci-app-openclash/root/etc/openclas
 # qmodem强制安装以覆盖现有的驱动程序/应用
 ./scripts/feeds install -a -f -p qmodem
 
-# 设置ARM64_CONTPTE选项为y
-echo "CONFIG_ARM64_CONTPTE=y" >> .config
+# 强制非交互模式：执行以下命令，这通常会让 kconfig 自动选择默认值（通常是‘Y’）
+yes "" | make kernel_oldconfig
