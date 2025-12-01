@@ -85,4 +85,4 @@ mv /tmp/GeoSite.dat feeds/luci/applications/luci-app-openclash/root/etc/openclas
 ./scripts/feeds install -a -f -p qmodem
 
 # 强制非交互模式：执行以下命令，这通常会让 kconfig 自动选择默认值（通常是‘Y’）
-# yes "" | make kernel_oldconfig
+yes "" | make kernel_oldconfig
