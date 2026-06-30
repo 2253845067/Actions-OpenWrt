@@ -11,7 +11,6 @@
 # 二、源代码地址
 
 - immorlinwrt：https://github.com/immortalwrt/immortalwrt
-- LEDE：https://github.com/coolsnowwolf/lede
 
 # 三、固件
 
@@ -19,6 +18,7 @@
 
 - 添加5G模块管理插件（QWRT模组管理）
 - 添加以下主要插件
+  - Docker
   - OpenClash
 
 ## 默认配置
@@ -37,7 +37,6 @@
 # 五、鸣谢
 
 - [immorlinwrt](https://github.com/immortalwrt/immortalwrt)
-- [Lean&#39;s OpenWrt](https://github.com/coolsnowwolf/lede)
 - [QModem](https://github.com/FUjr/QModem)
 - [P3TERX/Actions-OpenWrt](https://github.com/P3TERX/Actions-OpenWrt)
 - [istoreos](https://github.com/istoreos/istoreos)
@@ -51,6 +50,6 @@
 - [WeTransfer](https://wetransfer.com/)
 - [Mikubill/transfer](https://github.com/Mikubill/transfer)
 - [softprops/action-gh-release](https://github.com/softprops/action-gh-release)
-- [ActionsRML/delete-workflow-runs](https://github.com/ActionsRML/delete-workflow-runs)
-- [dev-drprasad/delete-older-releases](https://github.com/dev-drprasad/delete-older-releases)
-- [peter-evans/repository-dispatch](https://github.com/peter-evans/repository-dispatch)
+- [Mattraks/delete-workflow-runs](https://github.com/Mattraks/delete-workflow-runs)
+- [actions/github-script](https://github.com/actions/github-script)
+- [jlumbroso/free-disk-space](https://github.com/jlumbroso/free-disk-space)

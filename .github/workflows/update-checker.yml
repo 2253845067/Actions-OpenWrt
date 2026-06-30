@@ -10,16 +10,23 @@
 # See /LICENSE for more information.
 #
 
-name: Update Checker
+name: immorlinwrt Update Checker
 
 env:
-  REPO_URL: https://github.com/coolsnowwolf/lede
-  REPO_BRANCH: master
+  IMMORTALWRT_REPO_URL: https://github.com/immortalwrt/immortalwrt
+  IMMORTALWRT_BRANCH: master
+  QMODEM_REPO_URL: https://github.com/FUjr/QModem
+  QMODEM_BRANCH: main
+  BUILD_WORKFLOW: immorlinwrt-builder.yml
 
 on:
   workflow_dispatch:
   # schedule:
-  #  - cron: 0 */18 * * *
+  #   - cron: '0 */18 * * *'
+
+permissions:
+  contents: read
+  actions: write
 
 jobs:
   check:
@@ -27,33 +34,59 @@ jobs:
 
     steps:
 
-    - name: Get Commit Hash
+    - name: Get upstream commit hashes
       id: getHash
       run: |
-        git clone --depth 1 $REPO_URL -b $REPO_BRANCH .
-        echo "commitHash=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+        set -euo pipefail
 
-    - name: Compare Commit Hash
+        IMMORTALWRT_HASH="$(git ls-remote "$IMMORTALWRT_REPO_URL" "refs/heads/$IMMORTALWRT_BRANCH" | awk '{print $1}')"
+        QMODEM_HASH="$(git ls-remote "$QMODEM_REPO_URL" "refs/heads/$QMODEM_BRANCH" | awk '{print $1}')"
+
+        if [ -z "$IMMORTALWRT_HASH" ] || [ -z "$QMODEM_HASH" ]; then
+          echo "Failed to get upstream commit hashes." >&2
+          exit 1
+        fi
+
+        {
+          echo "immortalwrt=$IMMORTALWRT_HASH"
+          echo "qmodem=$QMODEM_HASH"
+        } > current-commit-hash.txt
+
+        COMMIT_HASH="$(sha256sum current-commit-hash.txt | awk '{print $1}')"
+        echo "commitHash=$COMMIT_HASH" >> "$GITHUB_OUTPUT"
+        echo "immortalwrtHash=$IMMORTALWRT_HASH" >> "$GITHUB_OUTPUT"
+        echo "qmodemHash=$QMODEM_HASH" >> "$GITHUB_OUTPUT"
+
+    - name: Compare commit hashes
       id: cacheHash
-      uses: actions/cache@v3
+      uses: actions/cache@main
       with:
         path: .commitHash
-        key: commitHash_${{ steps.getHash.outputs.commitHash }}
+        key: immorlinwrt_source_${{ steps.getHash.outputs.commitHash }}
 
-    - name: Save New Commit Hash
+    - name: Save new commit hashes
       if: steps.cacheHash.outputs.cache-hit != 'true'
       run: |
-        echo ${{ steps.getHash.outputs.commitHash }} | tee .commitHash
+        cp current-commit-hash.txt .commitHash
 
-    - name: Trigger build
+    - name: Trigger immorlinwrt builder
       if: steps.cacheHash.outputs.cache-hit != 'true'
-      uses: peter-evans/repository-dispatch@v2
-      with:
-        token: ${{ github.token }}
-        event-type: Source Code Update
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+
+        payload="$(printf '{"ref":"%s"}' "$GITHUB_REF_NAME")"
+        curl -fsSL -X POST \
+          -H "Accept: application/vnd.github+json" \
+          -H "Authorization: Bearer $GH_TOKEN" \
+          -H "X-GitHub-Api-Version: 2022-11-28" \
+          "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/${BUILD_WORKFLOW}/dispatches" \
+          -d "$payload"
 
     - name: Delete workflow runs
-      uses: Mattraks/delete-workflow-runs@v2
+      uses: Mattraks/delete-workflow-runs@main
       with:
         retain_days: 0
         keep_minimum_runs: 2
+        delete_workflow_pattern: update-checker.yml
