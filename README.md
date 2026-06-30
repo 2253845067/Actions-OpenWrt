@@ -38,6 +38,7 @@
 
 - [immorlinwrt](https://github.com/immortalwrt/immortalwrt)
 - [Lean&#39;s OpenWrt](https://github.com/coolsnowwolf/lede)
+- [QModem](https://github.com/FUjr/QModem)
 - [P3TERX/Actions-OpenWrt](https://github.com/P3TERX/Actions-OpenWrt)
 - [istoreos](https://github.com/istoreos/istoreos)
 - [Microsoft Azure](https://azure.microsoft.com)
