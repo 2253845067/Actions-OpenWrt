@@ -19,5 +19,11 @@
 # Modify hostname
 #sed -i 's/OpenWrt/P3TERX-Router/g' package/base-files/files/bin/config_generate
 
+# Fix Cyber 3588 AIB fan PWM settings. The stock DTS marks pwm1 as inverted
+# and uses a 10000 ns period; this board behaves correctly with normal polarity
+# and a 50000 ns period, matching the tested manual sysfs control values.
+DTS_FILE="target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3588-cyber3588-aib.dts"
+[ -f "$DTS_FILE" ] && sed -i 's|<&pwm1 0 10000 PWM_POLARITY_INVERTED>|<\&pwm1 0 50000 0>|' "$DTS_FILE"
+
 # qmodem强制安装以覆盖现有的驱动程序/应用
 ./scripts/feeds install -a -f -p qmodem
