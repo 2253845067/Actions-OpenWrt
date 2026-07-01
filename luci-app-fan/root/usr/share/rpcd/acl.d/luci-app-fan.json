@@ -1,0 +1,14 @@
+{
+	"luci-app-fan": {
+		"description": "Grant runtime and UCI access for luci-app-fan",
+		"read": {
+			"ubus": {
+				"luci.fan": [ "getStatus" ]
+			},
+			"uci": [ "luci-fan" ]
+		},
+		"write": {
+			"uci": [ "luci-fan" ]
+		}
+	}
+}

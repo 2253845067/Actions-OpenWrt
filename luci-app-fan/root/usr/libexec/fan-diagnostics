@@ -1,0 +1,189 @@
+#!/bin/sh
+# Fan Control Hardware Diagnostics
+# Checks for required thermal and PWM interfaces
+
+# Source shared library for utility functions
+. /usr/libexec/fan-lib.sh
+
+echo "============================================"
+echo "  风扇控制硬件兼容性诊断"
+echo "  Fan Control Hardware Diagnostics"
+echo "============================================"
+echo ""
+
+result_thermal=0
+result_pwm=0
+result_rpm=0
+
+# Check thermal zones
+echo "[1/3] 检查 CPU 热区 (Thermal Zones)..."
+echo "--------------------------------------------"
+
+if [ -d "/sys/class/thermal" ]; then
+    echo "✓ /sys/class/thermal 目录存在"
+    echo ""
+
+    found_cpu_zone=0
+    for zone in /sys/class/thermal/thermal_zone*; do
+        if [ -d "$zone" ]; then
+            zone_num=$(basename "$zone" | sed 's/thermal_zone//')
+            zone_type=$(read_trimmed "$zone/type" 2>/dev/null || echo "unknown")
+            zone_temp=$(read_number "$zone/temp" 2>/dev/null)
+
+            if [ -n "$zone_temp" ]; then
+                temp_c=$(awk -v t="$zone_temp" 'BEGIN { printf "%.1f", t/1000 }')
+                echo "  thermal_zone$zone_num"
+                echo "    类型: $zone_type"
+                echo "    温度: ${temp_c}°C"
+
+                # Check if this looks like CPU/SOC thermal zone
+                case "$zone_type" in
+                    *cpu*|*soc*|*package*|*x86*)
+                        echo "    ✓ 检测为 CPU/SOC 热区"
+                        found_cpu_zone=1
+                        ;;
+                esac
+                echo ""
+            fi
+        fi
+    done
+
+    if [ "$found_cpu_zone" -eq 1 ]; then
+        echo "✓ 找到可用的 CPU/SOC 热区"
+        result_thermal=1
+    else
+        echo "⚠  未找到明确的 CPU/SOC 热区，但有其他热区可用"
+        result_thermal=1
+    fi
+else
+    echo "✗ /sys/class/thermal 目录不存在"
+    result_thermal=0
+fi
+echo ""
+
+# Check PWM fans
+echo "[2/3] 检查 PWM 风扇接口..."
+echo "--------------------------------------------"
+
+if [ -d "/sys/class/hwmon" ]; then
+    echo "✓ /sys/class/hwmon 目录存在"
+    echo ""
+
+    found_pwm=0
+    for hwmon in /sys/class/hwmon/hwmon*; do
+        if [ -d "$hwmon" ]; then
+            hwmon_name=$(read_trimmed "$hwmon/name" 2>/dev/null || echo "unknown")
+            echo "  $hwmon"
+            echo "    名称: $hwmon_name"
+
+            # Check for PWM interfaces
+            for pwm in "$hwmon"/pwm*; do
+                if [ -f "$pwm" ] && ! [ -h "$pwm" ]; then
+                    pwm_num=$(basename "$pwm" | sed 's/pwm//')
+                    if [ -w "$pwm" ]; then
+                        echo "    ✓ pwm$pwm_num: 可写"
+                        found_pwm=1
+                    elif [ -r "$pwm" ]; then
+                        echo "    ⚠ pwm$pwm_num: 可读但不可写"
+                    fi
+                fi
+            done
+
+            # Check for enable files
+            for pwm_en in "$hwmon"/pwm*_enable; do
+                if [ -f "$pwm_en" ]; then
+                    pwm_num=$(basename "$pwm_en" | sed 's/pwm//;s/_enable//')
+                    if [ -w "$pwm_en" ]; then
+                        echo "    ✓ pwm${pwm_num}_enable: 可写"
+                    fi
+                fi
+            done
+
+            # Check for RPM sensors
+            found_rpm_in_hwmon=0
+            for rpm_file in "$hwmon"/fan*_input "$hwmon"/fan*_speed "$hwmon"/fan*_rpm "$hwmon"/rpm; do
+                if [ -r "$rpm_file" ]; then
+                    echo "    ✓ 转速传感器: $(basename "$rpm_file")"
+                    found_rpm_in_hwmon=1
+                    result_rpm=1
+                    break
+                fi
+            done
+
+            echo ""
+        fi
+    done
+
+    if [ "$found_pwm" -eq 1 ]; then
+        result_pwm=1
+    fi
+else
+    echo "✗ /sys/class/hwmon 目录不存在"
+    result_pwm=0
+fi
+echo ""
+
+# Check for trip points (fallback)
+echo "[3/3] 检查热区触发点 (Trip Points)..."
+echo "--------------------------------------------"
+found_trip=0
+if [ -d "/sys/class/thermal" ]; then
+    for zone in /sys/class/thermal/thermal_zone*; do
+        if [ -d "$zone" ]; then
+            zone_num=$(basename "$zone" | sed 's/thermal_zone//')
+            for cdev in "$zone"/cdev*; do
+                if [ -d "$cdev" ]; then
+                    cdev_type=$(read_trimmed "$cdev/type" 2>/dev/null || echo "")
+                    if echo "$cdev_type" | grep -iq "fan"; then
+                        trip=$(cat "${cdev}_trip_point" 2>/dev/null) || continue
+                        if [ -n "$trip" ]; then
+                            trip_temp=$(read_number "$zone/trip_point_${trip}_temp" 2>/dev/null)
+                            if [ -n "$trip_temp" ]; then
+                                temp_c=$(awk -v t="$trip_temp" 'BEGIN { printf "%.1f", t/1000 }')
+                                echo "✓ thermal_zone$zone_num 有风扇触发点 #$trip"
+                                echo "  触发温度: ${temp_c}°C"
+                                found_trip=1
+                            fi
+                        fi
+                    fi
+                fi
+            done
+        fi
+    done
+
+    if [ "$found_trip" -eq 0 ]; then
+        echo "  未找到可用的风扇触发点"
+    fi
+else
+    echo "  /sys/class/thermal 目录不存在"
+fi
+echo ""
+
+# Summary
+echo "============================================"
+echo "  诊断结果 (Diagnostics Summary)"
+echo "============================================"
+
+echo ""
+echo "硬件支持状态 (Hardware Support Status):"
+if [ "$result_thermal" -eq 1 ] && [ "$result_pwm" -eq 1 ]; then
+    echo "  ✓ 完全支持: 可使用智能/手动/狂暴模式"
+elif [ "$result_thermal" -eq 1 ] && [ "$found_trip" -eq 1 ]; then
+    echo "  ✓ 部分支持: 可使用热区触发点 fallback (无 PWM)"
+elif [ "$result_thermal" -eq 1 ]; then
+    echo "  ⚠ 仅温度监控可用: 无 PWM 风扇控制"
+else
+    echo "  ✗ 硬件不支持: 缺少热区或 PWM 接口"
+fi
+
+echo ""
+echo "组件检查 (Components):"
+echo "  温度传感器: $( [ "$result_thermal" -eq 1 ] && echo "✓ 可用" || echo "✗ 不可用" )"
+echo "  PWM 风扇: $( [ "$result_pwm" -eq 1 ] && echo "✓ 可用" || echo "✗ 不可用" )"
+echo "  转速传感器: $( [ "$result_rpm" -eq 1 ] && echo "✓ 可用" || echo "⚠ 不可用" )"
+
+echo ""
+echo "============================================"
+echo "  使用 luci.fan 进行完整测试"
+echo "  Run: ubus call luci.fan getStatus"
+echo "============================================"

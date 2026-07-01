@@ -25,5 +25,14 @@
 DTS_FILE="target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3588-cyber3588-aib.dts"
 [ -f "$DTS_FILE" ] && sed -i 's|<&pwm1 0 10000 PWM_POLARITY_INVERTED>|<\&pwm1 0 50000 0>|' "$DTS_FILE"
 
+# Add the local Cyber 3588 AIB LuCI fan plugin to the ImmortalWrt package tree.
+SCRIPT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+FAN_PACKAGE_SRC="${GITHUB_WORKSPACE:-$SCRIPT_ROOT}/luci-app-fan"
+FAN_PACKAGE_DST="package/luci-app-fan"
+if [ -d "$FAN_PACKAGE_SRC" ]; then
+    rm -rf "$FAN_PACKAGE_DST"
+    cp -a "$FAN_PACKAGE_SRC" "$FAN_PACKAGE_DST"
+fi
+
 # qmodem强制安装以覆盖现有的驱动程序/应用
 ./scripts/feeds install -a -f -p qmodem

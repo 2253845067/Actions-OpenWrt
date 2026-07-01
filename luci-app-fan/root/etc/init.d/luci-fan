@@ -1,0 +1,30 @@
+#!/bin/sh /etc/rc.common
+
+USE_PROCD=1
+START=20
+STOP=89
+
+start_service() {
+    [ -x /usr/libexec/fan-control ] || return 1
+
+    /usr/libexec/fan-control init >/dev/null 2>&1 || true
+
+    procd_open_instance
+    procd_set_param command /usr/libexec/fan-control daemon
+    procd_set_param respawn 3600 5 5
+    procd_close_instance
+}
+
+stop_service() {
+    [ -x /usr/libexec/fan-control ] || return 0
+    /usr/libexec/fan-control disable >/dev/null 2>&1 || true
+}
+
+reload_service() {
+    stop_service
+    start_service
+}
+
+service_triggers() {
+    procd_add_reload_trigger luci-fan
+}

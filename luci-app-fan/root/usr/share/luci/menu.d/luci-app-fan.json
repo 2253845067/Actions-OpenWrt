@@ -1,0 +1,13 @@
+{
+	"admin/status/luci-fan": {
+		"title": "风扇控制",
+		"order": 60,
+		"action": {
+			"type": "view",
+			"path": "fan"
+		},
+		"depends": {
+			"acl": [ "luci-app-fan" ]
+		}
+	}
+}
