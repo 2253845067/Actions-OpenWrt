@@ -20,6 +20,11 @@
 - 添加以下主要插件
   - Docker
   - OpenClash
+- 添加风扇控制脚本
+
+```bash
+sh /bin/install_fan_control.sh
+```
 
 ## 默认配置
 

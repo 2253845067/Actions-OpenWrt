@@ -1,8 +1,0 @@
-config luci-fan
-    option enabled 0
-    option mode smart
-    option manual_pwm 70
-    option on_temp 60
-    option off_temp 30
-    option max_rpm 3000
-    option poll_interval 5
