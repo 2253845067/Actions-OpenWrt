@@ -1,13 +1,25 @@
 #!/bin/sh
 
-# Cyber 3588 AIB 风扇控制安装脚本 V2.0
-# 方案B: 卸载 pwm_fan 内核模块，使用 raw sysfs PWM 控制
+# Cyber 3588 AIB 风扇控制安装脚本 V3.0
+# 修复清单:
+#   1. 修复 LuCI 菜单不显示 (新版 LuCI 需要 ACL 文件 + acl_depends)
+#   2. 修复 CPU 温度读取 (兼容无 thermal_zone 的固件)
+#   3. 修复 WiFi 温度读取 (按 hwmon 名称匹配, 区分 2.4G/5G)
+#   4. 修复 modem_temp 带 "°C" 后缀导致 PID 比较报错
+#   5. 修复 SSD 温度读取 (兼容 eMMC, 尝试 -d sat)
+#   6. 修复 init 脚本 stop() 使用 pkill (busybox 无 pkill)
+#   7. 添加 .leaf = true 防止子路由干扰菜单结构
+#   8. 添加 safe_max() 安全比较函数, 避免 "unknown operand" 错误
 # PWM: /sys/class/pwm/pwmchip0/pwm0 (period=50000ns, polarity=normal)
 
 # ==================== 清理旧版本 ====================
 echo "清理旧版本文件..."
 /etc/init.d/fancontrol stop 2>/dev/null
 /etc/init.d/fancontrol disable 2>/dev/null
+# 兼容无 pkill 的系统
+for pid in $(ps | grep "/usr/bin/fan_control" | grep -v grep | awk '{print $1}'); do
+    kill $pid 2>/dev/null
+done
 rm -f /usr/bin/sensors_monitor
 rm -f /usr/bin/set_fan_speed
 rm -f /usr/bin/fan_control
@@ -24,43 +36,83 @@ cat << 'INNER_EOF' > /usr/bin/sensors_monitor
 
 PWM_PATH="/sys/class/pwm/pwmchip0/pwm0"
 
+# 从 hwmon 设备名查找对应路径
+find_hwmon_by_name() {
+    for h in /sys/class/hwmon/hwmon*; do
+        name=$(cat "$h/name" 2>/dev/null)
+        if [ "$name" = "$1" ]; then
+            echo "$h"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# 提取纯数字温度值（去除°C等单位后缀）
+extract_temp() {
+    echo "$1" | grep -oE '[0-9]+' | head -1
+}
+
 # 采集数据并转换为JSON格式
 {
   echo "{"
 
-  # CPU温度
-  cpu_temp=$(cat /sys/devices/virtual/thermal/thermal_zone0/temp 2>/dev/null)
-  [ -n "$cpu_temp" ] && cpu_temp=$((cpu_temp/1000)) || cpu_temp="N/A"
-  echo "\"cpu_temp\": \"$cpu_temp\","
+  # CPU温度 - 尝试多个路径
+  cpu_temp=""
+  for path in \
+      /sys/class/thermal/thermal_zone0/temp \
+      /sys/devices/virtual/thermal/thermal_zone0/temp; do
+      val=$(cat "$path" 2>/dev/null)
+      if [ -n "$val" ] && [ "$val" -gt 0 ] 2>/dev/null; then
+          cpu_temp=$((val/1000))
+          break
+      fi
+  done
+  [ -n "$cpu_temp" ] && echo "\"cpu_temp\": \"$cpu_temp\"," || echo "\"cpu_temp\": \"N/A\","
 
-  # 5GHz WiFi温度
-  wifi5_temp=$(cat /sys/class/hwmon/hwmon*/temp1_input 2>/dev/null | sort -rn | head -1)
-  [ -n "$wifi5_temp" ] && wifi5_temp=$((wifi5_temp/1000)) || wifi5_temp="N/A"
+  # 5GHz WiFi温度 (mt7915_phy0 = hwmon2)
+  wifi5_hwmon=$(find_hwmon_by_name "mt7915_phy0")
+  if [ -n "$wifi5_hwmon" ]; then
+      wifi5_raw=$(cat "$wifi5_hwmon/temp1_input" 2>/dev/null)
+      [ -n "$wifi5_raw" ] && wifi5_temp=$((wifi5_raw/1000)) || wifi5_temp="N/A"
+  else
+      wifi5_temp="N/A"
+  fi
   echo "\"wifi5_temp\": \"$wifi5_temp\","
 
-  # 2.4GHz WiFi温度
-  wifi2_temp=$(cat /sys/class/hwmon/hwmon*/temp1_input 2>/dev/null | sort -n | head -1)
-  [ -n "$wifi2_temp" ] && wifi2_temp=$((wifi2_temp/1000)) || wifi2_temp="N/A"
+  # 2.4GHz WiFi温度 (mt7915_phy1 = hwmon3)
+  wifi2_hwmon=$(find_hwmon_by_name "mt7915_phy1")
+  if [ -n "$wifi2_hwmon" ]; then
+      wifi2_raw=$(cat "$wifi2_hwmon/temp1_input" 2>/dev/null)
+      [ -n "$wifi2_raw" ] && wifi2_temp=$((wifi2_raw/1000)) || wifi2_temp="N/A"
+  else
+      wifi2_temp="N/A"
+  fi
   echo "\"wifi2_temp\": \"$wifi2_temp\","
 
-  # SSD温度
-  ssd_temp=$(smartctl -A /dev/nvme0 2>/dev/null | awk '/Temperature:/ {print $2}')
+  # SSD/eMMC温度 - 尝试NVMe和eMMC
+  ssd_temp=""
+  if [ -e /dev/nvme0 ]; then
+      ssd_temp=$(smartctl -A /dev/nvme0 2>/dev/null | awk '/Temperature:/ {print $2}')
+  elif [ -e /dev/mmcblk0 ]; then
+      ssd_temp=$(smartctl -d sat -A /dev/mmcblk0 2>/dev/null | awk '/Temperature:/ {print $2}')
+  fi
   [ -n "$ssd_temp" ] || ssd_temp="N/A"
   echo "\"ssd_temp\": \"$ssd_temp\","
 
-  # 5G模组温度
-  modem_temp=$(/usr/libexec/rpcd/modem_ctrl call info 2>/dev/null | \
-               grep -A1 '"key": "temperature"' | \
-               grep '"value":' | \
-               cut -d'"' -f4 | \
-               awk '{print $1}')
+  # 5G模组温度 - 提取纯数字
+  modem_raw=$(/usr/libexec/rpcd/modem_ctrl call info 2>/dev/null | \
+              grep -A1 '"key": "temperature"' | \
+              grep '"value":' | \
+              cut -d'"' -f4)
+  modem_temp=$(extract_temp "$modem_raw")
   [ -n "$modem_temp" ] || modem_temp="N/A"
   echo "\"modem_temp\": \"$modem_temp\","
 
-  # 计算最高温度
+  # 计算最高温度（只比较有效数字）
   max_temp=0
   for temp in "$cpu_temp" "$wifi5_temp" "$wifi2_temp" "$ssd_temp" "$modem_temp"; do
-    if [ "$temp" != "N/A" ] && [ "$temp" -gt "$max_temp" ] 2>/dev/null; then
+    if [ "$temp" != "N/A" ] && [ -n "$temp" ] && [ "$temp" -gt "$max_temp" ] 2>/dev/null; then
       max_temp=$temp
     fi
   done
@@ -68,14 +120,21 @@ PWM_PATH="/sys/class/pwm/pwmchip0/pwm0"
 
   # 风扇转速 - 从 raw sysfs duty_cycle 读取并转换为百分比
   pwm_period=50000
+  fan_invert=0
   if [ -f "/etc/fan_config" ]; then
     cfg_period=$(grep "^pwm_period=" /etc/fan_config | cut -d'=' -f2)
     [ -n "$cfg_period" ] && pwm_period=$cfg_period
+    cfg_invert=$(grep "^fan_invert=" /etc/fan_config | cut -d'=' -f2)
+    [ -n "$cfg_invert" ] && fan_invert=$cfg_invert
   fi
 
   fan_duty=$(cat "$PWM_PATH/duty_cycle" 2>/dev/null)
   if [ -n "$fan_duty" ] && [ "$fan_duty" -ge 0 ] 2>/dev/null; then
-    fan_percent=$(( (fan_duty * 100) / pwm_period ))
+    if [ "$fan_invert" = "1" ]; then
+      fan_percent=$(( 100 - ((fan_duty * 100) / pwm_period) ))
+    else
+      fan_percent=$(( (fan_duty * 100) / pwm_period ))
+    fi
     echo "\"fan_percent\": \"$fan_percent\","
   else
     echo "\"fan_percent\": \"0\","
@@ -126,15 +185,23 @@ if [ "$percent" -lt 0 ] || [ "$percent" -gt 100 ]; then
   exit 1
 fi
 
-# 从配置文件读取 PWM period
+# 从配置文件读取 PWM period 和反转设置
 pwm_period=50000
+fan_invert=0
 if [ -f "/etc/fan_config" ]; then
     cfg_period=$(grep "^pwm_period=" /etc/fan_config | cut -d'=' -f2)
     [ -n "$cfg_period" ] && pwm_period=$cfg_period
+    cfg_invert=$(grep "^fan_invert=" /etc/fan_config | cut -d'=' -f2)
+    [ -n "$cfg_invert" ] && fan_invert=$cfg_invert
 fi
 
 # 将百分比转换为 duty_cycle (纳秒)
-duty_cycle=$(( percent * pwm_period / 100 ))
+# fan_invert=1 时反转: 100% -> duty_cycle=0 (最大转速), 0% -> duty_cycle=period (最小转速)
+if [ "$fan_invert" = "1" ]; then
+  duty_cycle=$(( pwm_period - (percent * pwm_period / 100) ))
+else
+  duty_cycle=$(( percent * pwm_period / 100 ))
+fi
 
 # PWM sysfs 路径
 PWM_PATH="/sys/class/pwm/pwmchip0/pwm0"
@@ -184,38 +251,94 @@ ensure_pwm_control() {
     return 0
 }
 
+# 从 hwmon 设备名查找对应路径
+find_hwmon_by_name() {
+    for h in /sys/class/hwmon/hwmon*; do
+        name=$(cat "$h/name" 2>/dev/null)
+        if [ "$name" = "$1" ]; then
+            echo "$h"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# 提取纯数字温度值
+extract_temp() {
+    echo "$1" | grep -oE '[0-9]+' | head -1
+}
+
+# 安全比较：仅在值是数字时比较，否则返回旧值
+safe_max() {
+    if [ "$1" != "N/A" ] && [ -n "$1" ] && [ "$1" -gt "$2" ] 2>/dev/null; then
+        echo "$1"
+    else
+        echo "$2"
+    fi
+}
+
 # PID状态变量
 last_error=0
 integral=0
 
 # 获取最高温度
 get_max_temp() {
-    cpu_temp=$(cat /sys/devices/virtual/thermal/thermal_zone0/temp 2>/dev/null)
-    [ -n "$cpu_temp" ] && cpu_temp=$((cpu_temp/1000)) || cpu_temp=0
+    # CPU温度
+    cpu_temp=""
+    for path in \
+        /sys/class/thermal/thermal_zone0/temp \
+        /sys/devices/virtual/thermal/thermal_zone0/temp; do
+        val=$(cat "$path" 2>/dev/null)
+        if [ -n "$val" ] && [ "$val" -gt 0 ] 2>/dev/null; then
+            cpu_temp=$((val/1000))
+            break
+        fi
+    done
 
-    wifi5_temp=$(cat /sys/class/hwmon/hwmon*/temp1_input 2>/dev/null | sort -rn | head -1)
-    [ -n "$wifi5_temp" ] && wifi5_temp=$((wifi5_temp/1000)) || wifi5_temp=0
+    # 5GHz WiFi温度
+    wifi5_hwmon=$(find_hwmon_by_name "mt7915_phy0")
+    if [ -n "$wifi5_hwmon" ]; then
+        wifi5_raw=$(cat "$wifi5_hwmon/temp1_input" 2>/dev/null)
+        [ -n "$wifi5_raw" ] && wifi5_temp=$((wifi5_raw/1000)) || wifi5_temp="N/A"
+    else
+        wifi5_temp="N/A"
+    fi
 
-    wifi2_temp=$(cat /sys/class/hwmon/hwmon*/temp1_input 2>/dev/null | sort -n | head -1)
-    [ -n "$wifi2_temp" ] && wifi2_temp=$((wifi2_temp/1000)) || wifi2_temp=0
+    # 2.4GHz WiFi温度
+    wifi2_hwmon=$(find_hwmon_by_name "mt7915_phy1")
+    if [ -n "$wifi2_hwmon" ]; then
+        wifi2_raw=$(cat "$wifi2_hwmon/temp1_input" 2>/dev/null)
+        [ -n "$wifi2_raw" ] && wifi2_temp=$((wifi2_raw/1000)) || wifi2_temp="N/A"
+    else
+        wifi2_temp="N/A"
+    fi
 
-    ssd_temp=$(smartctl -A /dev/nvme0 2>/dev/null | awk '/Temperature:/ {print $2}')
-    [ -n "$ssd_temp" ] || ssd_temp=0
+    # SSD/eMMC温度
+    ssd_temp=""
+    if [ -e /dev/nvme0 ]; then
+        ssd_temp=$(smartctl -A /dev/nvme0 2>/dev/null | awk '/Temperature:/ {print $2}')
+    elif [ -e /dev/mmcblk0 ]; then
+        ssd_temp=$(smartctl -d sat -A /dev/mmcblk0 2>/dev/null | awk '/Temperature:/ {print $2}')
+    fi
+    [ -n "$ssd_temp" ] || ssd_temp="N/A"
 
-    modem_temp=$(/usr/libexec/rpcd/modem_ctrl call info 2>/dev/null | \
-                 grep -A1 '"key": "temperature"' | \
-                 grep '"value":' | \
-                 cut -d'"' -f4 | \
-                 awk '{print $1}')
-    [ -n "$modem_temp" ] || modem_temp=0
+    # 5G模组温度 - 提取纯数字
+    modem_raw=$(/usr/libexec/rpcd/modem_ctrl call info 2>/dev/null | \
+                grep -A1 '"key": "temperature"' | \
+                grep '"value":' | \
+                cut -d'"' -f4)
+    modem_temp=$(extract_temp "$modem_raw")
+    [ -n "$modem_temp" ] || modem_temp="N/A"
 
-    max_temp=$cpu_temp
-    [ "$wifi5_temp" -gt "$max_temp" ] && max_temp=$wifi5_temp
-    [ "$wifi2_temp" -gt "$max_temp" ] && max_temp=$wifi2_temp
-    [ "$ssd_temp" -gt "$max_temp" ] && max_temp=$ssd_temp
-    [ "$modem_temp" -gt "$max_temp" ] && max_temp=$modem_temp
+    # 安全计算最高温度
+    max_temp=0
+    max_temp=$(safe_max "$cpu_temp" "$max_temp")
+    max_temp=$(safe_max "$wifi5_temp" "$max_temp")
+    max_temp=$(safe_max "$wifi2_temp" "$max_temp")
+    max_temp=$(safe_max "$ssd_temp" "$max_temp")
+    max_temp=$(safe_max "$modem_temp" "$max_temp")
 
-    echo $max_temp
+    echo "$max_temp"
 }
 
 # 使用 awk 进行浮点计算 (busybox自带，无需额外安装)
@@ -232,12 +355,18 @@ while true; do
 
     # 确保 PWM 可控
     if ! ensure_pwm_control; then
-        sleep $cycle
+        sleep "$cycle"
         continue
     fi
 
     if [ "$mode" = "auto" ]; then
         current_temp=$(get_max_temp)
+
+        # 如果所有温度都读取失败，跳过本轮
+        if [ -z "$current_temp" ] || [ "$current_temp" -eq 0 ] 2>/dev/null; then
+            sleep "$cycle"
+            continue
+        fi
 
         # PID 计算
         error=$(calc "$current_temp - $target_temp")
@@ -263,10 +392,10 @@ while true; do
 
         last_error=$error
 
-        /usr/bin/set_fan_speed "$speed" >/dev/null
+        /usr/bin/set_fan_speed "$speed" >/dev/null 2>&1
     fi
 
-    sleep $cycle
+    sleep "$cycle"
 done
 INNER_EOF
 chmod +x /usr/bin/fan_control
@@ -277,12 +406,19 @@ cat << 'INNER_EOF' > /usr/lib/lua/luci/controller/sensors.lua
 module("luci.controller.sensors", package.seeall)
 
 function index()
-    entry({"admin", "status", "sensors"}, template("sensors_monitor"), _("硬件监控 V2.0"), 90)
-    entry({"admin", "status", "sensors", "data"}, call("action_data"))
-    entry({"admin", "status", "sensors", "setfan"}, call("action_setfan"))
-    entry({"admin", "status", "sensors", "settemp"}, call("action_settemp"))
-    entry({"admin", "status", "sensors", "setmode"}, call("action_setmode"))
-    entry({"admin", "status", "sensors", "setpid"}, call("action_setpid"))
+    if not nixio.fs.access("/etc/fan_config") then
+        return
+    end
+
+    local page = entry({"admin", "status", "sensors"}, template("sensors_monitor"), _("硬件监控"), 90)
+    page.dependent = true
+    page.acl_depends = { "luci-app-sensors" }
+
+    entry({"admin", "status", "sensors", "data"}, call("action_data")).leaf = true
+    entry({"admin", "status", "sensors", "setfan"}, call("action_setfan")).leaf = true
+    entry({"admin", "status", "sensors", "settemp"}, call("action_settemp")).leaf = true
+    entry({"admin", "status", "sensors", "setmode"}, call("action_setmode")).leaf = true
+    entry({"admin", "status", "sensors", "setpid"}, call("action_setpid")).leaf = true
 end
 
 function action_data()
@@ -297,7 +433,7 @@ function action_setfan()
         os.execute("sed -i 's/^mode=.*/mode=manual/' /etc/fan_config")
         local result = luci.sys.exec("/usr/bin/set_fan_speed " .. tostring(math.floor(n)))
         luci.http.prepare_content("application/json")
-        luci.http.write('{"result": "success", "message": "' .. result:gsub('"', '\\"') .. '"}')
+        luci.http.write('{"result": "success", "message": "' .. result:gsub('"', '\\"'):gsub("\n", "") .. '"}')
     else
         luci.http.status(400, "Invalid parameter")
         luci.http.prepare_content("application/json")
@@ -372,6 +508,32 @@ function action_setpid()
 end
 INNER_EOF
 
+# ==================== 创建 LuCI ACL 权限文件 ====================
+echo "创建 LuCI ACL 权限文件..."
+cat << 'INNER_EOF' > /usr/share/rpcd/acl.d/luci-app-sensors.json
+{
+	"luci-app-sensors": {
+		"description": "Grant access for hardware monitoring and fan control",
+		"read": {
+			"file": {
+				"/usr/bin/sensors_monitor": [ "exec" ]
+			},
+			"ubus": {
+				"file": [ "exec", "stat" ]
+			}
+		},
+		"write": {
+			"file": {
+				"/usr/bin/set_fan_speed": [ "exec" ]
+			},
+			"ubus": {
+				"file": [ "exec" ]
+			}
+		}
+	}
+}
+INNER_EOF
+
 # ==================== 创建 LuCI 视图模板 ====================
 mkdir -p /usr/lib/lua/luci/view
 echo "创建 LuCI 视图模板..."
@@ -379,14 +541,12 @@ cat << 'INNER_EOF' > /usr/lib/lua/luci/view/sensors_monitor.htm
 <%+header%>
 
 <style>
-/* 简洁白色卡片设计 */
 .sensors-container {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 20px;
     padding: 15px;
 }
-
 .sensor-card {
     background: #ffffff;
     border-radius: 10px;
@@ -397,7 +557,6 @@ cat << 'INNER_EOF' > /usr/lib/lua/luci/view/sensors_monitor.htm
     position: relative;
     overflow: hidden;
 }
-
 .card-header {
     display: flex;
     align-items: center;
@@ -407,7 +566,6 @@ cat << 'INNER_EOF' > /usr/lib/lua/luci/view/sensors_monitor.htm
     position: relative;
     z-index: 2;
 }
-
 .card-icon {
     font-size: 24px;
     margin-right: 12px;
@@ -420,13 +578,7 @@ cat << 'INNER_EOF' > /usr/lib/lua/luci/view/sensors_monitor.htm
     border-radius: 10px;
     color: #4a6cf7;
 }
-
-.card-title {
-    font-size: 16px;
-    font-weight: 600;
-    color: #555;
-}
-
+.card-title { font-size: 16px; font-weight: 600; color: #555; }
 .card-value-container {
     position: relative;
     height: 100px;
@@ -434,7 +586,6 @@ cat << 'INNER_EOF' > /usr/lib/lua/luci/view/sensors_monitor.htm
     align-items: center;
     justify-content: center;
 }
-
 .card-value {
     font-size: 32px;
     font-weight: 700;
@@ -444,37 +595,16 @@ cat << 'INNER_EOF' > /usr/lib/lua/luci/view/sensors_monitor.htm
     position: relative;
     z-index: 2;
 }
-
-.card-unit {
-    font-size: 16px;
-    font-weight: 400;
-    color: #777;
-}
-
-/* 温度颜色指示 */
+.card-unit { font-size: 16px; font-weight: 400; color: #777; }
 .temp-low { color: #3498db; }
 .temp-medium { color: #f39c12; }
 .temp-high { color: #e74c3c; }
-
-/* 风扇卡片特殊样式 */
 .fan-card {
     grid-column: 1 / -1;
     background: #f8f9ff;
     border-top: 3px solid #4a6cf7;
 }
-
-.fan-card .card-icon {
-    background: #eef2ff;
-    color: #4a6cf7;
-}
-
-.fan-value {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-}
-
+.fan-card .card-icon { background: #eef2ff; color: #4a6cf7; }
 .refresh-info {
     text-align: center;
     padding: 15px;
@@ -485,7 +615,6 @@ cat << 'INNER_EOF' > /usr/lib/lua/luci/view/sensors_monitor.htm
     margin: 0 15px;
     border: 1px solid #eee;
 }
-
 .status-indicator {
     display: inline-block;
     width: 10px;
@@ -494,265 +623,80 @@ cat << 'INNER_EOF' > /usr/lib/lua/luci/view/sensors_monitor.htm
     margin-right: 8px;
     background-color: #2ecc71;
 }
-
-/* 风扇控制滑块样式 */
-.fan-control-container {
-    width: 100%;
-    padding: 10px 0;
-    margin-top: 15px;
-    position: relative;
-    z-index: 2;
-}
-
-.fan-slider-container {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    margin-bottom: 15px;
-}
-
+.fan-control-container { width: 100%; padding: 10px 0; margin-top: 15px; position: relative; z-index: 2; }
+.fan-slider-container { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; }
 .fan-slider {
-    flex-grow: 1;
-    height: 30px;
-    -webkit-appearance: none;
-    appearance: none;
-    background: #e0e0e0;
-    border-radius: 15px;
-    outline: none;
+    flex-grow: 1; height: 30px; -webkit-appearance: none; appearance: none;
+    background: #e0e0e0; border-radius: 15px; outline: none;
 }
-
 .fan-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background: #4a6cf7;
-    cursor: pointer;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    -webkit-appearance: none; appearance: none; width: 30px; height: 30px;
+    border-radius: 50%; background: #4a6cf7; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.2);
 }
-
 .fan-slider::-moz-range-thumb {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background: #4a6cf7;
-    cursor: pointer;
-    border: none;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    width: 30px; height: 30px; border-radius: 50%; background: #4a6cf7;
+    cursor: pointer; border: none; box-shadow: 0 2px 6px rgba(0,0,0,0.2);
 }
-
-.fan-slider-value {
-    min-width: 40px;
-    text-align: center;
-    font-weight: bold;
-    font-size: 16px;
-    color: #4a6cf7;
-}
-
-/* 温控设置样式 */
+.fan-slider-value { min-width: 40px; text-align: center; font-weight: bold; font-size: 16px; color: #4a6cf7; }
 .temp-control-container {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 15px;
-    margin-top: 20px;
-    background: #f0f5ff;
-    padding: 15px;
-    border-radius: 8px;
+    display: flex; flex-wrap: wrap; gap: 15px; margin-top: 20px;
+    background: #f0f5ff; padding: 15px; border-radius: 8px;
 }
-
-.temp-control-item {
-    flex: 1;
-    min-width: 200px;
-}
-
-.temp-control-label {
-    display: block;
-    margin-bottom: 8px;
-    font-weight: 500;
-    color: #555;
-}
-
-.temp-input {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    font-size: 16px;
-}
-
+.temp-control-item { flex: 1; min-width: 200px; }
+.temp-control-label { display: block; margin-bottom: 8px; font-weight: 500; color: #555; }
+.temp-input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
 .temp-set-btn {
-    background: #4a6cf7;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 500;
-    transition: background 0.3s;
+    background: #4a6cf7; color: white; border: none; padding: 10px 20px;
+    border-radius: 6px; cursor: pointer; font-weight: 500; transition: background 0.3s;
 }
-
-.temp-set-btn:hover {
-    background: #3a5ad8;
-}
-
-.mode-switch {
-    display: flex;
-    gap: 10px;
-    margin-top: 10px;
-}
-
+.temp-set-btn:hover { background: #3a5ad8; }
+.mode-switch { display: flex; gap: 10px; margin-top: 10px; }
 .mode-btn {
-    flex: 1;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    background: #f8f9fa;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.3s;
+    flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px;
+    background: #f8f9fa; text-align: center; cursor: pointer; transition: all 0.3s;
 }
-
-.mode-btn.active {
-    background: #4a6cf7;
-    color: white;
-    border-color: #4a6cf7;
-}
-
-/* 最高温度卡片样式 */
-.max-temp-card {
-    grid-column: 1 / -1;
-    background: #fff8f0;
-    border-top: 3px solid #ff9800;
-}
-
-.max-temp-card .card-icon {
-    background: #fff4e6;
-    color: #ff9800;
-}
-
-/* PID控制面板样式 */
+.mode-btn.active { background: #4a6cf7; color: white; border-color: #4a6cf7; }
+.max-temp-card { grid-column: 1 / -1; background: #fff8f0; border-top: 3px solid #ff9800; }
+.max-temp-card .card-icon { background: #fff4e6; color: #ff9800; }
 .pid-panel {
-    margin-top: 20px;
-    background: #f8f9ff;
-    border-radius: 8px;
-    padding: 15px;
-    border: 1px solid #e0e0ff;
+    margin-top: 20px; background: #f8f9ff; border-radius: 8px;
+    padding: 15px; border: 1px solid #e0e0ff;
 }
-
 .pid-toggle {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    cursor: pointer;
-    padding: 10px;
-    background: #eef2ff;
-    border-radius: 6px;
+    display: flex; justify-content: space-between; align-items: center; cursor: pointer;
+    padding: 10px; background: #eef2ff; border-radius: 6px;
 }
-
-.pid-toggle:hover {
-    background: #e0e8ff;
-}
-
-.pid-title {
-    font-weight: 600;
-    color: #4a6cf7;
-}
-
-.pid-content {
-    padding: 15px;
-    display: none; /* 默认折叠 */
-}
-
-.pid-content.active {
-    display: block;
-}
-
-.pid-controls {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 15px;
-    margin-top: 10px;
-}
-
-.pid-control {
-    display: flex;
-    flex-direction: column;
-}
-
-.pid-label {
-    margin-bottom: 5px;
-    font-weight: 500;
-    color: #555;
-}
-
-.pid-input {
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    font-size: 16px;
-}
-
+.pid-toggle:hover { background: #e0e8ff; }
+.pid-title { font-weight: 600; color: #4a6cf7; }
+.pid-content { padding: 15px; display: none; }
+.pid-content.active { display: block; }
+.pid-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 10px; }
+.pid-control { display: flex; flex-direction: column; }
+.pid-label { margin-bottom: 5px; font-weight: 500; color: #555; }
+.pid-input { padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
 .pid-set-btn {
-    background: #4a6cf7;
-    color: white;
-    border: none;
-    padding: 10px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 500;
-    transition: background 0.3s;
-    margin-top: 20px;
-    width: 100%;
+    background: #4a6cf7; color: white; border: none; padding: 10px; border-radius: 6px;
+    cursor: pointer; font-weight: 500; transition: background 0.3s; margin-top: 20px; width: 100%;
 }
-
-.pid-set-btn:hover {
-    background: #3a5ad8;
-}
-
-/* 响应式设计 */
+.pid-set-btn:hover { background: #3a5ad8; }
 @media (max-width: 768px) {
-    .sensors-container {
-        grid-template-columns: 1fr;
-    }
-
-    .temp-control-container {
-        flex-direction: column;
-    }
-
-    .pid-controls {
-        grid-template-columns: 1fr;
-    }
+    .sensors-container { grid-template-columns: 1fr; }
+    .temp-control-container { flex-direction: column; }
+    .pid-controls { grid-template-columns: 1fr; }
 }
-
-/* 版本信息 */
 .version-info {
-    position: fixed;
-    bottom: 10px;
-    right: 10px;
-    font-size: 12px;
-    color: #999;
-    background: rgba(255,255,255,0.8);
-    padding: 2px 5px;
-    border-radius: 3px;
+    position: fixed; bottom: 10px; right: 10px; font-size: 12px;
+    color: #999; background: rgba(255,255,255,0.8); padding: 2px 5px; border-radius: 3px;
 }
-
-/* 曲线图背景样式 */
 .chart-bg {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 1;
-    opacity: 0.5;
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 1; opacity: 0.5;
 }
 </style>
 
 <div class="cbi-map">
-    <h2 name="content"><%:硬件状态监控 V2.0%></h2>
+    <h2 name="content"><%:硬件状态监控 V3.0%></h2>
     <div class="cbi-map-descr"><%:实时设备传感器数据 - 每秒自动刷新%></div>
-
     <div class="sensors-container" id="sensors-container">
         <div class="sensor-card">
             <div class="card-header">
@@ -765,7 +709,6 @@ cat << 'INNER_EOF' > /usr/lib/lua/luci/view/sensors_monitor.htm
             </div>
         </div>
     </div>
-
     <div class="refresh-info">
         <span id="refresh-status">
             <span class="status-indicator"></span>
@@ -773,11 +716,9 @@ cat << 'INNER_EOF' > /usr/lib/lua/luci/view/sensors_monitor.htm
         </span>
     </div>
 </div>
-
-<div class="version-info">Powered by UnderTheSun</div>
+<div class="version-info">V3.0 Optimized</div>
 
 <script>
-// 传感器配置
 const sensors = [
     { id: "cpu_temp", name: "CPU温度", unit: "\u2103", icon: "\uD83D\uDD25", type: "temp" },
     { id: "wifi5_temp", name: "5GHz WiFi", unit: "\u2103", icon: "\uD83D\uDCF6", type: "temp" },
@@ -787,91 +728,44 @@ const sensors = [
     { id: "max_temp", name: "最高温度", unit: "\u2103", icon: "\uD83D\uDCC8", type: "temp", class: "max-temp-card" },
     { id: "fan_percent", name: "风扇转速", unit: "%", icon: "\uD83C\uDF00", type: "fan", class: "fan-card" }
 ];
-
 const historyData = {};
-sensors.forEach(sensor => {
-    historyData[sensor.id] = [];
-});
-
+sensors.forEach(sensor => { historyData[sensor.id] = []; });
 const container = document.getElementById('sensors-container');
 const lastUpdateEl = document.getElementById('last-update');
 
 function initCards() {
     container.innerHTML = '';
-
     sensors.forEach(sensor => {
         const card = document.createElement('div');
         card.className = 'sensor-card ' + (sensor.class || '');
         card.id = 'card-' + sensor.id;
-
         if (sensor.type === 'fan') {
-            card.innerHTML = '<div class="card-header">' +
-                '<div class="card-icon">' + sensor.icon + '</div>' +
-                '<div class="card-title">' + sensor.name + '</div>' +
-                '</div>' +
-                '<div class="card-value-container">' +
-                '<canvas class="chart-bg" id="chart-' + sensor.id + '"></canvas>' +
-                '<div class="card-value">--</div>' +
-                '</div>' +
-                '<div class="fan-control-container">' +
-                '<div class="fan-slider-container">' +
-                '<span>手动转速:</span>' +
-                '<input type="range" min="0" max="100" value="0" class="fan-slider" id="fan-slider">' +
-                '<span class="fan-slider-value" id="fan-slider-value">0%</span>' +
-                '</div>' +
-                '<div class="temp-control-container">' +
-                '<div class="temp-control-item">' +
-                '<label class="temp-control-label">目标温度 (\u2103)</label>' +
-                '<input type="number" min="40" max="80" value="55" class="temp-input" id="target-temp-input">' +
-                '<button class="temp-set-btn" onclick="setTargetTemp()">设置</button>' +
-                '</div>' +
-                '<div class="temp-control-item">' +
-                '<label class="temp-control-label">工作模式</label>' +
-                '<div class="mode-switch">' +
-                '<div class="mode-btn" data-mode="auto" onclick="setMode(\'auto\')">自动温控</div>' +
-                '<div class="mode-btn" data-mode="manual" onclick="setMode(\'manual\')">手动控制</div>' +
-                '</div>' +
-                '</div>' +
-                '</div>' +
+            card.innerHTML = '<div class="card-header"><div class="card-icon">' + sensor.icon + '</div><div class="card-title">' + sensor.name + '</div></div>' +
+                '<div class="card-value-container"><canvas class="chart-bg" id="chart-' + sensor.id + '"></canvas><div class="card-value">--</div></div>' +
+                '<div class="fan-control-container"><div class="fan-slider-container"><span>手动转速:</span>' +
+                '<input type="range" min="0" max="100" value="0" class="fan-slider" id="fan-slider"><span class="fan-slider-value" id="fan-slider-value">0%</span></div>' +
+                '<div class="temp-control-container"><div class="temp-control-item"><label class="temp-control-label">目标温度 (\u2103)</label>' +
+                '<input type="number" min="40" max="80" value="55" class="temp-input" id="target-temp-input"><button class="temp-set-btn" onclick="setTargetTemp()">设置</button></div>' +
+                '<div class="temp-control-item"><label class="temp-control-label">工作模式</label><div class="mode-switch">' +
+                '<div class="mode-btn" data-mode="auto" onclick="setMode(\'auto\')">自动温控</div><div class="mode-btn" data-mode="manual" onclick="setMode(\'manual\')">手动控制</div></div></div></div>' +
                 '<div id="fan-status">当前模式: <span id="current-mode">--</span> | 目标温度: <span id="current-temp">--</span>\u2103</div>' +
-                '<div class="pid-panel">' +
-                '<div class="pid-toggle" onclick="togglePidPanel()">' +
-                '<span class="pid-title">PID参数设置</span>' +
-                '<span id="pid-toggle-icon">\u25BC</span>' +
-                '</div>' +
-                '<div class="pid-content" id="pid-content">' +
-                '<div class="pid-controls">' +
+                '<div class="pid-panel"><div class="pid-toggle" onclick="togglePidPanel()"><span class="pid-title">PID参数设置</span><span id="pid-toggle-icon">\u25BC</span></div>' +
+                '<div class="pid-content" id="pid-content"><div class="pid-controls">' +
                 '<div class="pid-control"><label class="pid-label">比例系数 (Kp)</label><input type="number" step="0.1" min="0.1" max="20" class="pid-input" id="kp-input"></div>' +
                 '<div class="pid-control"><label class="pid-label">积分系数 (Ki)</label><input type="number" step="0.01" min="0.01" max="5" class="pid-input" id="ki-input"></div>' +
                 '<div class="pid-control"><label class="pid-label">微分系数 (Kd)</label><input type="number" step="0.1" min="0" max="10" class="pid-input" id="kd-input"></div>' +
                 '<div class="pid-control"><label class="pid-label">控制周期 (秒)</label><input type="number" min="1" max="10" class="pid-input" id="cycle-input"></div>' +
-                '</div>' +
-                '<button class="pid-set-btn" onclick="setPidParams()">保存PID设置</button>' +
-                '</div>' +
-                '</div>' +
-                '</div>';
+                '</div><button class="pid-set-btn" onclick="setPidParams()">保存PID设置</button></div></div></div>';
         } else {
-            card.innerHTML = '<div class="card-header">' +
-                '<div class="card-icon">' + sensor.icon + '</div>' +
-                '<div class="card-title">' + sensor.name + '</div>' +
-                '</div>' +
-                '<div class="card-value-container">' +
-                '<canvas class="chart-bg" id="chart-' + sensor.id + '"></canvas>' +
-                '<div class="card-value">--</div>' +
-                '</div>';
+            card.innerHTML = '<div class="card-header"><div class="card-icon">' + sensor.icon + '</div><div class="card-title">' + sensor.name + '</div></div>' +
+                '<div class="card-value-container"><canvas class="chart-bg" id="chart-' + sensor.id + '"></canvas><div class="card-value">--</div></div>';
         }
-
         container.appendChild(card);
     });
-
     var fanSlider = document.getElementById('fan-slider');
     if (fanSlider) {
-        fanSlider.addEventListener('input', function() {
-            document.getElementById('fan-slider-value').textContent = this.value + '%';
-        });
-        fanSlider.addEventListener('change', function() {
-            setFanSpeed(this.value);
-        });
+        fanSlider.addEventListener('input', function() { document.getElementById('fan-slider-value').textContent = this.value + '%'; });
+        fanSlider.addEventListener('change', function() { setFanSpeed(this.value); });
     }
 }
 
@@ -879,13 +773,9 @@ function drawChart(canvasId, values, maxValue, minValue) {
     var canvas = document.getElementById(canvasId);
     if (!canvas) return;
     var ctx = canvas.getContext('2d');
-    var width = canvas.width;
-    var height = canvas.height;
+    var width = canvas.width, height = canvas.height;
     ctx.clearRect(0, 0, width, height);
-    ctx.strokeStyle = '#4a6cf7';
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#4a6cf7'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.beginPath();
     var pointCount = values.length;
     if (pointCount < 2) return;
@@ -909,11 +799,7 @@ function setFanSpeed(percent) {
     var xhr = new XMLHttpRequest();
     xhr.open('POST', '<%=url("admin/status/sensors/setfan")%>');
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-    xhr.onload = function() {
-        if (xhr.status === 200) {
-            try { var r = JSON.parse(xhr.responseText); console.log(r.message); } catch(e) {}
-        }
-    };
+    xhr.onload = function() { if (xhr.status === 200) { try { var r = JSON.parse(xhr.responseText); console.log(r.message); } catch(e) {} } };
     xhr.send('fan_percent=' + encodeURIComponent(percent));
 }
 
@@ -923,27 +809,17 @@ function setTargetTemp() {
     var xhr = new XMLHttpRequest();
     xhr.open('POST', '<%=url("admin/status/sensors/settemp")%>');
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-    xhr.onload = function() {
-        if (xhr.status === 200) {
-            try { var r = JSON.parse(xhr.responseText); if (r.result === 'success') document.getElementById('current-temp').textContent = tempValue; } catch(e) {}
-        }
-    };
+    xhr.onload = function() { if (xhr.status === 200) { try { var r = JSON.parse(xhr.responseText); if (r.result === 'success') document.getElementById('current-temp').textContent = tempValue; } catch(e) {} } };
     xhr.send('target_temp=' + encodeURIComponent(tempValue));
 }
 
 function setMode(mode) {
-    document.querySelectorAll('.mode-btn').forEach(function(btn) {
-        btn.classList.toggle('active', btn.dataset.mode === mode);
-    });
+    document.querySelectorAll('.mode-btn').forEach(function(btn) { btn.classList.toggle('active', btn.dataset.mode === mode); });
     var fanSpeed = mode === 'manual' ? document.getElementById('fan-slider').value : '0';
     var xhr = new XMLHttpRequest();
     xhr.open('POST', '<%=url("admin/status/sensors/setmode")%>');
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-    xhr.onload = function() {
-        if (xhr.status === 200) {
-            try { var r = JSON.parse(xhr.responseText); if (r.result === 'success') document.getElementById('current-mode').textContent = mode === 'auto' ? '自动温控' : '手动控制'; } catch(e) {}
-        }
-    };
+    xhr.onload = function() { if (xhr.status === 200) { try { var r = JSON.parse(xhr.responseText); if (r.result === 'success') document.getElementById('current-mode').textContent = mode === 'auto' ? '自动温控' : '手动控制'; } catch(e) {} } };
     xhr.send('mode=' + encodeURIComponent(mode) + '&fan_percent=' + encodeURIComponent(fanSpeed));
 }
 
@@ -964,9 +840,8 @@ function setPidParams() {
     xhr.open('POST', '<%=url("admin/status/sensors/setpid")%>');
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     xhr.onload = function() {
-        if (xhr.status === 200) {
-            try { var r = JSON.parse(xhr.responseText); alert(r.result === 'success' ? 'PID参数更新成功！' : '出错: ' + r.message); } catch(e) { alert('解析响应出错'); }
-        } else { alert('请求失败'); }
+        if (xhr.status === 200) { try { var r = JSON.parse(xhr.responseText); alert(r.result === 'success' ? 'PID参数更新成功！' : '出错: ' + r.message); } catch(e) { alert('解析响应出错'); } }
+        else { alert('请求失败'); }
     };
     xhr.send('kp=' + encodeURIComponent(kp) + '&ki=' + encodeURIComponent(ki) + '&kd=' + encodeURIComponent(kd) + '&cycle=' + encodeURIComponent(cycle));
 }
@@ -977,7 +852,6 @@ function updateCards(data) {
         var card = document.getElementById('card-' + sensor.id);
         if (!card) return;
         var valueEl = card.querySelector('.card-value');
-
         if (value !== 'N/A') {
             if (sensor.type === 'fan') {
                 var fp = parseInt(value);
@@ -989,9 +863,7 @@ function updateCards(data) {
                 }
                 document.getElementById('current-mode').textContent = data.fan_mode === 'auto' ? '自动温控' : '手动控制';
                 document.getElementById('current-temp').textContent = data.fan_target_temp || '55';
-                document.querySelectorAll('.mode-btn').forEach(function(btn) {
-                    btn.classList.toggle('active', btn.dataset.mode === data.fan_mode);
-                });
+                document.querySelectorAll('.mode-btn').forEach(function(btn) { btn.classList.toggle('active', btn.dataset.mode === data.fan_mode); });
                 var ti = document.getElementById('target-temp-input');
                 if (ti && document.activeElement !== ti) ti.value = data.fan_target_temp || '55';
                 var kpI = document.getElementById('kp-input');
@@ -1009,7 +881,6 @@ function updateCards(data) {
                     if (!isNaN(t)) valueEl.className = 'card-value ' + (t < 50 ? 'temp-low' : t < 70 ? 'temp-medium' : 'temp-high');
                 }
             }
-
             if (historyData[sensor.id].length >= 60) historyData[sensor.id].shift();
             historyData[sensor.id].push(value === 'N/A' ? 0 : parseInt(value));
             drawChart('chart-' + sensor.id, historyData[sensor.id],
@@ -1028,9 +899,7 @@ function fetchSensorData() {
     xhr.open('GET', '<%=url("admin/status/sensors/data")%>');
     xhr.setRequestHeader('Cache-Control', 'no-cache');
     xhr.onload = function() {
-        if (xhr.status === 200) {
-            try { updateCards(JSON.parse(xhr.responseText)); } catch(e) { console.error(e); }
-        }
+        if (xhr.status === 200) { try { updateCards(JSON.parse(xhr.responseText)); } catch(e) { console.error(e); } }
     };
     xhr.send();
 }
@@ -1063,6 +932,9 @@ kp=5.0
 ki=0.1
 kd=1.0
 cycle=10
+
+# 风扇反转 (1=百分比越高转速越小, 0=正常)
+fan_invert=1
 INNER_EOF
 
 # ==================== 创建开机启动服务 ====================
@@ -1091,7 +963,6 @@ start() {
     fi
 
     if [ -d "$PWM_PATH" ]; then
-        # 先禁用以便安全设置 polarity
         echo 0 > "$PWM_PATH/enable" 2>/dev/null
         echo $PWM_PERIOD > "$PWM_PATH/period"
         echo 0 > "$PWM_PATH/duty_cycle"
@@ -1108,7 +979,10 @@ start() {
 
 stop() {
     echo "Stopping fan control service"
-    pkill -f "/usr/bin/fan_control"
+    # 兼容无 pkill 的系统：用 ps + kill 替代
+    for pid in $(ps | grep "/usr/bin/fan_control" | grep -v grep | awk '{print $1}'); do
+        kill $pid 2>/dev/null
+    done
 
     # 禁用 PWM 输出 (风扇停转)
     if [ -d "$PWM_PATH" ]; then
@@ -1133,15 +1007,26 @@ chmod +x /usr/bin/sensors_monitor
 /etc/init.d/fancontrol enable
 /etc/init.d/fancontrol start
 
-# ==================== 重启 uhttpd ====================
+# ==================== 清理 LuCI 缓存并重启服务 ====================
+rm -rf /tmp/luci-*
+/etc/init.d/rpcd restart
+sleep 1
 /etc/init.d/uhttpd restart
 
 echo "=============================================="
-echo " Cyber 3588 AIB 温度监控和风扇控制 V2.0"
+echo " Cyber 3588 AIB 温度监控和风扇控制 V3.0"
 echo "----------------------------------------------"
 echo " 方案B: raw sysfs PWM 控制"
 echo " PWM: pwmchip0/pwm0 (period=50000ns, normal polarity)"
 echo " pwm_fan 内核模块已卸载，完全由脚本控制"
+echo "----------------------------------------------"
+echo " V3.0 修复内容:"
+echo "  1. LuCI 菜单不显示 (ACL + acl_depends)"
+echo "  2. CPU/WiFi/SSD/modem 温度读取"
+echo "  3. modem_temp 带°C后缀导致PID报错"
+echo "  4. init 脚本 stop() 兼容无 pkill"
+echo "  5. 子路由添加 .leaf = true"
+echo "  6. 风扇反转支持 (fan_invert=1)"
 echo "----------------------------------------------"
 echo " PID参数范围:"
 echo "  Kp: 0.1-20.0 (推荐5.0)"
@@ -1149,8 +1034,8 @@ echo "  Ki: 0.01-5.0 (推荐0.1)"
 echo "  Kd: 0-10.0 (推荐1.0)"
 echo "  周期: 1-10秒 (推荐10)"
 echo "----------------------------------------------"
-echo " 注意: smartctl 需要安装 smartmontools 包"
-echo "       (opkg install smartmontools)"
+echo " 注意: 清除浏览器缓存后刷新 LuCI 页面"
+echo "       如果菜单仍不显示, 请退出重新登录"
 echo "----------------------------------------------"
 echo " 访问路径: LuCI -> 状态 -> 硬件监控"
 echo "=============================================="
