@@ -53,21 +53,99 @@ extract_temp() {
     echo "$1" | grep -oE '[0-9]+' | head -1
 }
 
+read_temp_file() {
+    temp_raw=$(cat "$1" 2>/dev/null)
+    temp_val=$(extract_temp "$temp_raw")
+
+    if [ -n "$temp_val" ] && [ "$temp_val" -gt 0 ] 2>/dev/null; then
+        # Linux thermal/hwmon normally reports millidegrees, but some boards use Celsius.
+        if [ "$temp_val" -gt 1000 ]; then
+            temp_val=$((temp_val/1000))
+        fi
+
+        if [ "$temp_val" -gt 0 ] && [ "$temp_val" -lt 130 ] 2>/dev/null; then
+            echo "$temp_val"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+get_cpu_temp() {
+    cpu_best=""
+
+    if [ -f "/etc/fan_config" ]; then
+        cpu_temp_path=$(grep "^cpu_temp_path=" /etc/fan_config | cut -d'=' -f2-)
+        if [ -n "$cpu_temp_path" ] && [ -f "$cpu_temp_path" ]; then
+            cpu_val=$(read_temp_file "$cpu_temp_path")
+            if [ -n "$cpu_val" ]; then
+                echo "$cpu_val"
+                return 0
+            fi
+        fi
+    fi
+
+    # RK3588/OpenWrt builds may expose CPU/SOC temperature under different zone indexes.
+    for path in /sys/class/thermal/thermal_zone*/temp /sys/devices/virtual/thermal/thermal_zone*/temp; do
+        [ -f "$path" ] || continue
+        zone_dir=${path%/temp}
+        zone_type=$(cat "$zone_dir/type" 2>/dev/null)
+        case "$zone_type" in
+            *cpu*|*CPU*|*soc*|*SOC*|*cluster*|*Cluster*)
+                cpu_val=$(read_temp_file "$path")
+                if [ -n "$cpu_val" ] && { [ -z "$cpu_best" ] || [ "$cpu_val" -gt "$cpu_best" ] 2>/dev/null; }; then
+                    cpu_best=$cpu_val
+                fi
+                ;;
+        esac
+    done
+
+    if [ -n "$cpu_best" ]; then
+        echo "$cpu_best"
+        return 0
+    fi
+
+    # Some kernels only publish CPU/SOC temperature through hwmon.
+    for h in /sys/class/hwmon/hwmon*; do
+        [ -d "$h" ] || continue
+        name=$(cat "$h/name" 2>/dev/null)
+        case "$name" in
+            *cpu*|*CPU*|*soc*|*SOC*|*rockchip*|*Rockchip*|*scmi*|*SCMI*|*thermal*|*Thermal*)
+                for path in "$h"/temp*_input; do
+                    [ -f "$path" ] || continue
+                    cpu_val=$(read_temp_file "$path")
+                    if [ -n "$cpu_val" ] && { [ -z "$cpu_best" ] || [ "$cpu_val" -gt "$cpu_best" ] 2>/dev/null; }; then
+                        cpu_best=$cpu_val
+                    fi
+                done
+                ;;
+        esac
+    done
+
+    if [ -n "$cpu_best" ]; then
+        echo "$cpu_best"
+        return 0
+    fi
+
+    # Last resort: use the highest sane thermal zone instead of showing N/A.
+    for path in /sys/class/thermal/thermal_zone*/temp /sys/devices/virtual/thermal/thermal_zone*/temp; do
+        [ -f "$path" ] || continue
+        cpu_val=$(read_temp_file "$path")
+        if [ -n "$cpu_val" ] && { [ -z "$cpu_best" ] || [ "$cpu_val" -gt "$cpu_best" ] 2>/dev/null; }; then
+            cpu_best=$cpu_val
+        fi
+    done
+
+    [ -n "$cpu_best" ] && echo "$cpu_best"
+}
+
 # 采集数据并转换为JSON格式
 {
   echo "{"
 
-  # CPU温度 - 尝试多个路径
-  cpu_temp=""
-  for path in \
-      /sys/class/thermal/thermal_zone0/temp \
-      /sys/devices/virtual/thermal/thermal_zone0/temp; do
-      val=$(cat "$path" 2>/dev/null)
-      if [ -n "$val" ] && [ "$val" -gt 0 ] 2>/dev/null; then
-          cpu_temp=$((val/1000))
-          break
-      fi
-  done
+  # CPU温度 - 自动发现 thermal/hwmon 节点
+  cpu_temp=$(get_cpu_temp)
   [ -n "$cpu_temp" ] && echo "\"cpu_temp\": \"$cpu_temp\"," || echo "\"cpu_temp\": \"N/A\","
 
   # 5GHz WiFi温度 (mt7915_phy0 = hwmon2)
@@ -268,6 +346,93 @@ extract_temp() {
     echo "$1" | grep -oE '[0-9]+' | head -1
 }
 
+read_temp_file() {
+    temp_raw=$(cat "$1" 2>/dev/null)
+    temp_val=$(extract_temp "$temp_raw")
+
+    if [ -n "$temp_val" ] && [ "$temp_val" -gt 0 ] 2>/dev/null; then
+        # Linux thermal/hwmon normally reports millidegrees, but some boards use Celsius.
+        if [ "$temp_val" -gt 1000 ]; then
+            temp_val=$((temp_val/1000))
+        fi
+
+        if [ "$temp_val" -gt 0 ] && [ "$temp_val" -lt 130 ] 2>/dev/null; then
+            echo "$temp_val"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+get_cpu_temp() {
+    cpu_best=""
+
+    if [ -f "/etc/fan_config" ]; then
+        cpu_temp_path=$(grep "^cpu_temp_path=" /etc/fan_config | cut -d'=' -f2-)
+        if [ -n "$cpu_temp_path" ] && [ -f "$cpu_temp_path" ]; then
+            cpu_val=$(read_temp_file "$cpu_temp_path")
+            if [ -n "$cpu_val" ]; then
+                echo "$cpu_val"
+                return 0
+            fi
+        fi
+    fi
+
+    # RK3588/OpenWrt builds may expose CPU/SOC temperature under different zone indexes.
+    for path in /sys/class/thermal/thermal_zone*/temp /sys/devices/virtual/thermal/thermal_zone*/temp; do
+        [ -f "$path" ] || continue
+        zone_dir=${path%/temp}
+        zone_type=$(cat "$zone_dir/type" 2>/dev/null)
+        case "$zone_type" in
+            *cpu*|*CPU*|*soc*|*SOC*|*cluster*|*Cluster*)
+                cpu_val=$(read_temp_file "$path")
+                if [ -n "$cpu_val" ] && { [ -z "$cpu_best" ] || [ "$cpu_val" -gt "$cpu_best" ] 2>/dev/null; }; then
+                    cpu_best=$cpu_val
+                fi
+                ;;
+        esac
+    done
+
+    if [ -n "$cpu_best" ]; then
+        echo "$cpu_best"
+        return 0
+    fi
+
+    # Some kernels only publish CPU/SOC temperature through hwmon.
+    for h in /sys/class/hwmon/hwmon*; do
+        [ -d "$h" ] || continue
+        name=$(cat "$h/name" 2>/dev/null)
+        case "$name" in
+            *cpu*|*CPU*|*soc*|*SOC*|*rockchip*|*Rockchip*|*scmi*|*SCMI*|*thermal*|*Thermal*)
+                for path in "$h"/temp*_input; do
+                    [ -f "$path" ] || continue
+                    cpu_val=$(read_temp_file "$path")
+                    if [ -n "$cpu_val" ] && { [ -z "$cpu_best" ] || [ "$cpu_val" -gt "$cpu_best" ] 2>/dev/null; }; then
+                        cpu_best=$cpu_val
+                    fi
+                done
+                ;;
+        esac
+    done
+
+    if [ -n "$cpu_best" ]; then
+        echo "$cpu_best"
+        return 0
+    fi
+
+    # Last resort: use the highest sane thermal zone instead of showing N/A.
+    for path in /sys/class/thermal/thermal_zone*/temp /sys/devices/virtual/thermal/thermal_zone*/temp; do
+        [ -f "$path" ] || continue
+        cpu_val=$(read_temp_file "$path")
+        if [ -n "$cpu_val" ] && { [ -z "$cpu_best" ] || [ "$cpu_val" -gt "$cpu_best" ] 2>/dev/null; }; then
+            cpu_best=$cpu_val
+        fi
+    done
+
+    [ -n "$cpu_best" ] && echo "$cpu_best"
+}
+
 # 安全比较：仅在值是数字时比较，否则返回旧值
 safe_max() {
     if [ "$1" != "N/A" ] && [ -n "$1" ] && [ "$1" -gt "$2" ] 2>/dev/null; then
@@ -284,16 +449,7 @@ integral=0
 # 获取最高温度
 get_max_temp() {
     # CPU温度
-    cpu_temp=""
-    for path in \
-        /sys/class/thermal/thermal_zone0/temp \
-        /sys/devices/virtual/thermal/thermal_zone0/temp; do
-        val=$(cat "$path" 2>/dev/null)
-        if [ -n "$val" ] && [ "$val" -gt 0 ] 2>/dev/null; then
-            cpu_temp=$((val/1000))
-            break
-        fi
-    done
+    cpu_temp=$(get_cpu_temp)
 
     # 5GHz WiFi温度
     wifi5_hwmon=$(find_hwmon_by_name "mt7915_phy0")
@@ -926,6 +1082,9 @@ max_speed=100
 
 # PWM 参数 (sysfs duty_cycle 单位为纳秒)
 pwm_period=50000
+
+# 可选: 手动指定 CPU 温度节点，例如 /sys/class/thermal/thermal_zone1/temp
+# cpu_temp_path=/sys/class/thermal/thermal_zone1/temp
 
 # PID参数设置
 kp=5.0

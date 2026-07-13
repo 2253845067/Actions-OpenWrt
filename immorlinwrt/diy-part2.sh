@@ -19,6 +19,14 @@
 # Modify hostname
 #sed -i 's/OpenWrt/P3TERX-Router/g' package/base-files/files/bin/config_generate
 
+# Fix Cyber 3588 AIB thermal zone registration on newer kernels.
+# Linux rejects thermal zones when passive_delay is greater than polling_delay,
+# which makes rockchip-thermal fail with -EINVAL and removes CPU temp sysfs nodes.
+CYBER_DTS="target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3588-cyber3588-aib.dts"
+if [ -f "$CYBER_DTS" ]; then
+    sed -i '/&package_thermal {/,/};/s/polling-delay-passive = <2000>;/polling-delay-passive = <1000>;/' "$CYBER_DTS"
+fi
+
 # Embed install_fan_control.sh into the firmware's /bin directory.
 # After flashing, just run: sh /bin/install_fan_control.sh
 FAN_SCRIPT="${GITHUB_WORKSPACE}/install_fan_control.sh"
