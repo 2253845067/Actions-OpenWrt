@@ -1,0 +1,2 @@
+*.sh text eol=lf
+install_fan_control.sh text eol=lf

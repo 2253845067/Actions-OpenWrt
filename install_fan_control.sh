@@ -1,16 +1,6 @@
 #!/bin/sh
 
 # Cyber 3588 AIB 风扇控制安装脚本 V3.0
-# 修复清单:
-#   1. 修复 LuCI 菜单不显示 (新版 LuCI 需要 ACL 文件 + acl_depends)
-#   2. 修复 CPU 温度读取 (兼容无 thermal_zone 的固件)
-#   3. 修复 WiFi 温度读取 (按 hwmon 名称匹配, 区分 2.4G/5G)
-#   4. 修复 modem_temp 带 "°C" 后缀导致 PID 比较报错
-#   5. 修复 SSD 温度读取 (兼容 eMMC, 尝试 -d sat)
-#   6. 修复 init 脚本 stop() 使用 pkill (busybox 无 pkill)
-#   7. 添加 .leaf = true 防止子路由干扰菜单结构
-#   8. 添加 safe_max() 安全比较函数, 避免 "unknown operand" 错误
-# PWM: /sys/class/pwm/pwmchip0/pwm0 (period=50000ns, polarity=normal)
 
 # ==================== 清理旧版本 ====================
 echo "清理旧版本文件..."
@@ -196,27 +186,69 @@ get_cpu_temp() {
   done
   echo "\"max_temp\": \"$max_temp\","
 
-  # 风扇转速 - 从 raw sysfs duty_cycle 读取并转换为百分比
+  # 风扇控制后端:
+  #   dts: DTS/内核 pwm_fan 根据 thermal trip 自动控制
+  #   raw: 卸载 pwm_fan，改由脚本直接控制 sysfs PWM
+  control_backend="dts"
   pwm_period=50000
   fan_invert=0
   if [ -f "/etc/fan_config" ]; then
+    cfg_backend=$(grep "^control_backend=" /etc/fan_config | cut -d'=' -f2)
+    [ -n "$cfg_backend" ] && control_backend=$cfg_backend
     cfg_period=$(grep "^pwm_period=" /etc/fan_config | cut -d'=' -f2)
     [ -n "$cfg_period" ] && pwm_period=$cfg_period
     cfg_invert=$(grep "^fan_invert=" /etc/fan_config | cut -d'=' -f2)
     [ -n "$cfg_invert" ] && fan_invert=$cfg_invert
   fi
 
-  fan_duty=$(cat "$PWM_PATH/duty_cycle" 2>/dev/null)
-  if [ -n "$fan_duty" ] && [ "$fan_duty" -ge 0 ] 2>/dev/null; then
-    if [ "$fan_invert" = "1" ]; then
-      fan_percent=$(( 100 - ((fan_duty * 100) / pwm_period) ))
-    else
-      fan_percent=$(( (fan_duty * 100) / pwm_period ))
-    fi
-    echo "\"fan_percent\": \"$fan_percent\","
-  else
-    echo "\"fan_percent\": \"0\","
+  fan_percent=0
+  fan_rpm=0
+  fan_cooling_state="N/A"
+  pwm_fan_loaded=0
+  raw_pwm_available=0
+
+  if lsmod | grep -q "^pwm_fan"; then
+    pwm_fan_loaded=1
   fi
+  [ -d "$PWM_PATH" ] && raw_pwm_available=1
+
+  if [ "$control_backend" = "raw" ]; then
+    fan_duty=$(cat "$PWM_PATH/duty_cycle" 2>/dev/null)
+    if [ -n "$fan_duty" ] && [ "$fan_duty" -ge 0 ] 2>/dev/null; then
+      if [ "$fan_invert" = "1" ]; then
+        fan_percent=$(( 100 - ((fan_duty * 100) / pwm_period) ))
+      else
+        fan_percent=$(( (fan_duty * 100) / pwm_period ))
+      fi
+    fi
+  else
+    pwmfan_hwmon=$(find_hwmon_by_name "pwmfan")
+    if [ -n "$pwmfan_hwmon" ]; then
+      fan_pwm=$(cat "$pwmfan_hwmon/pwm1" 2>/dev/null)
+      fan_rpm=$(cat "$pwmfan_hwmon/fan1_input" 2>/dev/null)
+      [ -n "$fan_rpm" ] || fan_rpm=0
+      if [ -n "$fan_pwm" ] && [ "$fan_pwm" -ge 0 ] 2>/dev/null; then
+        fan_percent=$(( (fan_pwm * 100) / 255 ))
+      fi
+    fi
+
+    for cdev in /sys/class/thermal/cooling_device*; do
+      [ -d "$cdev" ] || continue
+      ctype=$(cat "$cdev/type" 2>/dev/null)
+      if [ "$ctype" = "pwm-fan" ]; then
+        fan_cooling_state=$(cat "$cdev/cur_state" 2>/dev/null)
+        [ -n "$fan_cooling_state" ] || fan_cooling_state="N/A"
+        break
+      fi
+    done
+  fi
+
+  echo "\"fan_percent\": \"$fan_percent\","
+  echo "\"fan_rpm\": \"$fan_rpm\","
+  echo "\"fan_cooling_state\": \"$fan_cooling_state\","
+  echo "\"control_backend\": \"$control_backend\","
+  echo "\"pwm_fan_loaded\": \"$pwm_fan_loaded\","
+  echo "\"raw_pwm_available\": \"$raw_pwm_available\","
 
   # 添加风扇配置信息
   if [ -f "/etc/fan_config" ]; then
@@ -266,11 +298,19 @@ fi
 # 从配置文件读取 PWM period 和反转设置
 pwm_period=50000
 fan_invert=0
+control_backend="dts"
 if [ -f "/etc/fan_config" ]; then
+    cfg_backend=$(grep "^control_backend=" /etc/fan_config | cut -d'=' -f2)
+    [ -n "$cfg_backend" ] && control_backend=$cfg_backend
     cfg_period=$(grep "^pwm_period=" /etc/fan_config | cut -d'=' -f2)
     [ -n "$cfg_period" ] && pwm_period=$cfg_period
     cfg_invert=$(grep "^fan_invert=" /etc/fan_config | cut -d'=' -f2)
     [ -n "$cfg_invert" ] && fan_invert=$cfg_invert
+fi
+
+if [ "$control_backend" != "raw" ]; then
+  echo "Error: 当前是 DTS 内核控制模式，请先切换到脚本接管控制模式。"
+  exit 1
 fi
 
 # 将百分比转换为 duty_cycle (纳秒)
@@ -312,6 +352,7 @@ else
     kd=1.0
     cycle=10
     pwm_period=50000
+    control_backend="dts"
 fi
 
 PWM_PATH="/sys/class/pwm/pwmchip0/pwm0"
@@ -509,6 +550,11 @@ while true; do
         source /etc/fan_config
     fi
 
+    if [ "$control_backend" != "raw" ]; then
+        echo "当前是 DTS 内核控制模式，fan_control 退出。"
+        exit 0
+    fi
+
     # 确保 PWM 可控
     if ! ensure_pwm_control; then
         sleep "$cycle"
@@ -574,6 +620,7 @@ function index()
     entry({"admin", "status", "sensors", "setfan"}, call("action_setfan")).leaf = true
     entry({"admin", "status", "sensors", "settemp"}, call("action_settemp")).leaf = true
     entry({"admin", "status", "sensors", "setmode"}, call("action_setmode")).leaf = true
+    entry({"admin", "status", "sensors", "setbackend"}, call("action_setbackend")).leaf = true
     entry({"admin", "status", "sensors", "setpid"}, call("action_setpid")).leaf = true
 end
 
@@ -582,7 +629,50 @@ function action_data()
     luci.http.write(luci.sys.exec("/usr/bin/sensors_monitor"))
 end
 
+local function get_backend()
+    local backend = luci.sys.exec("grep '^control_backend=' /etc/fan_config 2>/dev/null | cut -d= -f2"):gsub("%s+", "")
+    if backend ~= "raw" then
+        backend = "dts"
+    end
+    return backend
+end
+
+local function write_json(status, body)
+    if status and status ~= 200 then
+        luci.http.status(status, body)
+    end
+    luci.http.prepare_content("application/json")
+    luci.http.write(body)
+end
+
+local function require_raw_backend()
+    if get_backend() ~= "raw" then
+        write_json(409, '{"result": "error", "message": "当前是 DTS 内核控制模式，请先切换到脚本接管控制模式。"}')
+        return false
+    end
+    return true
+end
+
+local function set_config(key, value)
+    os.execute("grep -q '^" .. key .. "=' /etc/fan_config && sed -i 's/^" .. key .. "=.*/" .. key .. "=" .. value .. "/' /etc/fan_config || echo '" .. key .. "=" .. value .. "' >> /etc/fan_config")
+end
+
+function action_setbackend()
+    local backend = luci.http.formvalue("backend")
+    if backend == "dts" or backend == "raw" then
+        set_config("control_backend", backend)
+        if backend == "dts" then
+            set_config("mode", "auto")
+        end
+        os.execute("/etc/init.d/fancontrol restart >/tmp/fancontrol-switch.log 2>&1 &")
+        write_json(200, '{"result": "success", "message": "风扇控制方式已切换"}')
+    else
+        write_json(400, '{"result": "error", "message": "无效的风扇控制方式"}')
+    end
+end
+
 function action_setfan()
+    if not require_raw_backend() then return end
     local fan_percent = luci.http.formvalue("fan_percent")
     local n = tonumber(fan_percent)
     if n and n >= 0 and n <= 100 then
@@ -598,6 +688,7 @@ function action_setfan()
 end
 
 function action_settemp()
+    if not require_raw_backend() then return end
     local target_temp = luci.http.formvalue("target_temp")
     local n = tonumber(target_temp)
     if n and n >= 40 and n <= 80 then
@@ -612,6 +703,7 @@ function action_settemp()
 end
 
 function action_setmode()
+    if not require_raw_backend() then return end
     local mode = luci.http.formvalue("mode")
     if mode == "auto" or mode == "manual" then
         os.execute("sed -i 's/^mode=.*/mode=" .. mode .. "/' /etc/fan_config")
@@ -634,6 +726,7 @@ function action_setmode()
 end
 
 function action_setpid()
+    if not require_raw_backend() then return end
     local kp = luci.http.formvalue("kp")
     local ki = luci.http.formvalue("ki")
     local kd = luci.http.formvalue("kd")
@@ -812,6 +905,17 @@ cat << 'INNER_EOF' > /usr/lib/lua/luci/view/sensors_monitor.htm
     background: #f8f9fa; text-align: center; cursor: pointer; transition: all 0.3s;
 }
 .mode-btn.active { background: #4a6cf7; color: white; border-color: #4a6cf7; }
+.backend-switch { display: flex; gap: 10px; margin-bottom: 15px; }
+.backend-btn {
+    flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px;
+    background: #f8f9fa; text-align: center; cursor: pointer; transition: all 0.3s;
+}
+.backend-btn.active { background: #2f855a; color: white; border-color: #2f855a; }
+.fan-readonly-note {
+    display: none; padding: 12px; margin-top: 12px; border-radius: 6px;
+    background: #f3faf7; border: 1px solid #c6f6d5; color: #276749;
+}
+.fan-extra-status { margin-top: 8px; color: #666; font-size: 13px; }
 .max-temp-card { grid-column: 1 / -1; background: #fff8f0; border-top: 3px solid #ff9800; }
 .max-temp-card .card-icon { background: #fff4e6; color: #ff9800; }
 .pid-panel {
@@ -839,10 +943,6 @@ cat << 'INNER_EOF' > /usr/lib/lua/luci/view/sensors_monitor.htm
     .sensors-container { grid-template-columns: 1fr; }
     .temp-control-container { flex-direction: column; }
     .pid-controls { grid-template-columns: 1fr; }
-}
-.version-info {
-    position: fixed; bottom: 10px; right: 10px; font-size: 12px;
-    color: #999; background: rgba(255,255,255,0.8); padding: 2px 5px; border-radius: 3px;
 }
 .chart-bg {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -872,8 +972,6 @@ cat << 'INNER_EOF' > /usr/lib/lua/luci/view/sensors_monitor.htm
         </span>
     </div>
 </div>
-<div class="version-info">V3.0 Optimized</div>
-
 <script>
 const sensors = [
     { id: "cpu_temp", name: "CPU温度", unit: "\u2103", icon: "\uD83D\uDD25", type: "temp" },
@@ -888,6 +986,7 @@ const historyData = {};
 sensors.forEach(sensor => { historyData[sensor.id] = []; });
 const container = document.getElementById('sensors-container');
 const lastUpdateEl = document.getElementById('last-update');
+let currentBackend = 'dts';
 
 function initCards() {
     container.innerHTML = '';
@@ -898,7 +997,10 @@ function initCards() {
         if (sensor.type === 'fan') {
             card.innerHTML = '<div class="card-header"><div class="card-icon">' + sensor.icon + '</div><div class="card-title">' + sensor.name + '</div></div>' +
                 '<div class="card-value-container"><canvas class="chart-bg" id="chart-' + sensor.id + '"></canvas><div class="card-value">--</div></div>' +
-                '<div class="fan-control-container"><div class="fan-slider-container"><span>手动转速:</span>' +
+                '<div class="fan-control-container"><div class="backend-switch">' +
+                '<div class="backend-btn" data-backend="dts" onclick="setBackend(\'dts\')">DTS内核控制</div><div class="backend-btn" data-backend="raw" onclick="setBackend(\'raw\')">脚本接管控制</div></div>' +
+                '<div id="dts-readonly-note" class="fan-readonly-note">DTS模式: 风扇由内核thermal控制，页面只显示温度和转速。</div>' +
+                '<div id="raw-control-panel"><div class="fan-slider-container"><span>手动转速:</span>' +
                 '<input type="range" min="0" max="100" value="0" class="fan-slider" id="fan-slider"><span class="fan-slider-value" id="fan-slider-value">0%</span></div>' +
                 '<div class="temp-control-container"><div class="temp-control-item"><label class="temp-control-label">目标温度 (\u2103)</label>' +
                 '<input type="number" min="40" max="80" value="55" class="temp-input" id="target-temp-input"><button class="temp-set-btn" onclick="setTargetTemp()">设置</button></div>' +
@@ -911,7 +1013,8 @@ function initCards() {
                 '<div class="pid-control"><label class="pid-label">积分系数 (Ki)</label><input type="number" step="0.01" min="0.01" max="5" class="pid-input" id="ki-input"></div>' +
                 '<div class="pid-control"><label class="pid-label">微分系数 (Kd)</label><input type="number" step="0.1" min="0" max="10" class="pid-input" id="kd-input"></div>' +
                 '<div class="pid-control"><label class="pid-label">控制周期 (秒)</label><input type="number" min="1" max="10" class="pid-input" id="cycle-input"></div>' +
-                '</div><button class="pid-set-btn" onclick="setPidParams()">保存PID设置</button></div></div></div>';
+                '</div><button class="pid-set-btn" onclick="setPidParams()">保存PID设置</button></div></div></div>' +
+                '<div class="fan-extra-status">转速: <span id="fan-rpm">--</span> RPM | 散热档位: <span id="fan-cooling-state">--</span> | 内核模块: <span id="pwm-fan-loaded">--</span></div></div>';
         } else {
             card.innerHTML = '<div class="card-header"><div class="card-icon">' + sensor.icon + '</div><div class="card-title">' + sensor.name + '</div></div>' +
                 '<div class="card-value-container"><canvas class="chart-bg" id="chart-' + sensor.id + '"></canvas><div class="card-value">--</div></div>';
@@ -951,7 +1054,40 @@ function drawChart(canvasId, values, maxValue, minValue) {
     ctx.stroke();
 }
 
+function setBackend(backend) {
+    if (backend !== 'dts' && backend !== 'raw') return;
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '<%=url("admin/status/sensors/setbackend")%>');
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        if (xhr.status === 200) {
+            currentBackend = backend;
+            applyBackendState({ control_backend: backend });
+            setTimeout(fetchSensorData, 1500);
+        } else {
+            alert('切换风扇控制方式失败');
+        }
+    };
+    xhr.send('backend=' + encodeURIComponent(backend));
+}
+
+function applyBackendState(data) {
+    currentBackend = data.control_backend === 'raw' ? 'raw' : 'dts';
+    var raw = currentBackend === 'raw';
+    document.querySelectorAll('.backend-btn').forEach(function(btn) {
+        btn.classList.toggle('active', btn.dataset.backend === currentBackend);
+    });
+    var rawPanel = document.getElementById('raw-control-panel');
+    var dtsNote = document.getElementById('dts-readonly-note');
+    if (rawPanel) rawPanel.style.display = raw ? 'block' : 'none';
+    if (dtsNote) dtsNote.style.display = raw ? 'none' : 'block';
+    document.querySelectorAll('#raw-control-panel input, #raw-control-panel button').forEach(function(el) {
+        el.disabled = !raw;
+    });
+}
+
 function setFanSpeed(percent) {
+    if (currentBackend !== 'raw') { alert('DTS模式下风扇由内核控制，请先切换到脚本接管控制模式'); return; }
     var xhr = new XMLHttpRequest();
     xhr.open('POST', '<%=url("admin/status/sensors/setfan")%>');
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
@@ -960,6 +1096,7 @@ function setFanSpeed(percent) {
 }
 
 function setTargetTemp() {
+    if (currentBackend !== 'raw') { alert('DTS模式下不能设置脚本目标温度'); return; }
     var tempValue = document.getElementById('target-temp-input').value;
     if (!tempValue || tempValue < 40 || tempValue > 80) { alert('请输入有效的温度值 (40-80\u2103)'); return; }
     var xhr = new XMLHttpRequest();
@@ -970,6 +1107,7 @@ function setTargetTemp() {
 }
 
 function setMode(mode) {
+    if (currentBackend !== 'raw') { alert('DTS模式下不能切换脚本工作模式'); return; }
     document.querySelectorAll('.mode-btn').forEach(function(btn) { btn.classList.toggle('active', btn.dataset.mode === mode); });
     var fanSpeed = mode === 'manual' ? document.getElementById('fan-slider').value : '0';
     var xhr = new XMLHttpRequest();
@@ -987,6 +1125,7 @@ function togglePidPanel() {
 }
 
 function setPidParams() {
+    if (currentBackend !== 'raw') { alert('DTS模式下不能设置PID参数'); return; }
     var kp = document.getElementById('kp-input').value;
     var ki = document.getElementById('ki-input').value;
     var kd = document.getElementById('kd-input').value;
@@ -1012,14 +1151,21 @@ function updateCards(data) {
             if (sensor.type === 'fan') {
                 var fp = parseInt(value);
                 valueEl.innerHTML = fp + '<span class="card-unit">%</span>';
-                if (data.fan_mode !== 'manual') {
+                applyBackendState(data);
+                if (data.fan_mode !== 'manual' || data.control_backend !== 'raw') {
                     var s = document.getElementById('fan-slider');
                     var sv = document.getElementById('fan-slider-value');
                     if (s && sv) { s.value = fp; sv.textContent = fp + '%'; }
                 }
-                document.getElementById('current-mode').textContent = data.fan_mode === 'auto' ? '自动温控' : '手动控制';
+                document.getElementById('current-mode').textContent = data.control_backend === 'raw' ? (data.fan_mode === 'auto' ? '自动温控' : '手动控制') : 'DTS内核控制';
                 document.getElementById('current-temp').textContent = data.fan_target_temp || '55';
                 document.querySelectorAll('.mode-btn').forEach(function(btn) { btn.classList.toggle('active', btn.dataset.mode === data.fan_mode); });
+                var rpmEl = document.getElementById('fan-rpm');
+                var coolingEl = document.getElementById('fan-cooling-state');
+                var loadedEl = document.getElementById('pwm-fan-loaded');
+                if (rpmEl) rpmEl.textContent = data.fan_rpm || '0';
+                if (coolingEl) coolingEl.textContent = data.fan_cooling_state || 'N/A';
+                if (loadedEl) loadedEl.textContent = data.pwm_fan_loaded === '1' ? '已加载' : '未加载';
                 var ti = document.getElementById('target-temp-input');
                 if (ti && document.activeElement !== ti) ti.value = data.fan_target_temp || '55';
                 var kpI = document.getElementById('kp-input');
@@ -1074,7 +1220,9 @@ INNER_EOF
 echo "创建风扇配置文件..."
 cat << 'INNER_EOF' > /etc/fan_config
 # 风扇控制配置 - Cyber 3588 AIB
-# 方案B: raw sysfs PWM 控制 (pwm_fan 内核模块已卸载)
+# control_backend=dts: DTS/内核 pwm_fan 自动控制风扇，网页只读显示温度和转速。
+# control_backend=raw: 脚本接管控制，卸载 pwm_fan 后直接控制 sysfs PWM。
+control_backend=dts
 mode=auto
 target_temp=55
 min_speed=20
@@ -1108,14 +1256,42 @@ PWM_CHIP="/sys/class/pwm/pwmchip0"
 PWM_PATH="${PWM_CHIP}/pwm0"
 PWM_PERIOD=50000
 
-start() {
-    echo "Starting fan control service (raw sysfs PWM)"
+kill_fan_control() {
+    for pid in $(ps | grep "/usr/bin/fan_control" | grep -v grep | awk '{print $1}'); do
+        kill $pid 2>/dev/null
+    done
+}
 
-    # 卸载 pwm_fan 内核模块，释放 PWM 控制权
+get_backend() {
+    backend="dts"
+    if [ -f "/etc/fan_config" ]; then
+        cfg_backend=$(grep "^control_backend=" /etc/fan_config | cut -d'=' -f2)
+        [ -n "$cfg_backend" ] && backend=$cfg_backend
+    fi
+    echo "$backend"
+}
+
+start() {
+    backend=$(get_backend)
+    echo "Starting fan control service (backend: $backend)"
+
+    kill_fan_control
+
+    if [ "$backend" != "raw" ]; then
+        # DTS内核控制: 保留 pwm_fan，由 thermal cooling maps 自动调速。
+        if [ -d "$PWM_PATH" ]; then
+            echo 0 > "$PWM_PATH/enable" 2>/dev/null
+            echo 0 > "$PWM_CHIP/unexport" 2>/dev/null
+        fi
+        modprobe pwm_fan 2>/dev/null
+        return 0
+    fi
+
+    # 脚本接管控制: 卸载 pwm_fan 内核模块，释放 PWM 控制权。
     rmmod pwm_fan 2>/dev/null
     sleep 1
 
-    # 设置 raw sysfs PWM
+    # 设置脚本接管后的 sysfs PWM
     if [ ! -d "$PWM_PATH" ]; then
         echo 0 > "$PWM_CHIP/export"
         sleep 1
@@ -1139,9 +1315,7 @@ start() {
 stop() {
     echo "Stopping fan control service"
     # 兼容无 pkill 的系统：用 ps + kill 替代
-    for pid in $(ps | grep "/usr/bin/fan_control" | grep -v grep | awk '{print $1}'); do
-        kill $pid 2>/dev/null
-    done
+    kill_fan_control
 
     # 禁用 PWM 输出 (风扇停转)
     if [ -d "$PWM_PATH" ]; then
@@ -1175,17 +1349,9 @@ sleep 1
 echo "=============================================="
 echo " Cyber 3588 AIB 温度监控和风扇控制 V3.0"
 echo "----------------------------------------------"
-echo " 方案B: raw sysfs PWM 控制"
-echo " PWM: pwmchip0/pwm0 (period=50000ns, normal polarity)"
-echo " pwm_fan 内核模块已卸载，完全由脚本控制"
-echo "----------------------------------------------"
-echo " V3.0 修复内容:"
-echo "  1. LuCI 菜单不显示 (ACL + acl_depends)"
-echo "  2. CPU/WiFi/SSD/modem 温度读取"
-echo "  3. modem_temp 带°C后缀导致PID报错"
-echo "  4. init 脚本 stop() 兼容无 pkill"
-echo "  5. 子路由添加 .leaf = true"
-echo "  6. 风扇反转支持 (fan_invert=1)"
+echo " 控制后端可在网页切换:"
+echo "  - DTS内核控制: 保留 pwm_fan，按 DTS thermal trip 自动调速，网页只读显示"
+echo "  - 脚本接管控制: 卸载 pwm_fan，由脚本控制 PWM/PID，可手动调速"
 echo "----------------------------------------------"
 echo " PID参数范围:"
 echo "  Kp: 0.1-20.0 (推荐5.0)"
