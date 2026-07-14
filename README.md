@@ -18,9 +18,10 @@
 
 - 添加5G模块管理插件（QWRT模组管理）
 - 添加以下主要插件
-  - Docker
   - OpenClash
-- 添加风扇控制脚本
+  - Docker
+  - ZeroTier
+- 添加风扇控制安装脚本
 
 ```bash
 sh /bin/install_fan_control.sh
@@ -35,9 +36,12 @@ sh /bin/install_fan_control.sh
 
 # 四、展示
 
-![](/img/Snipaste_2025-12-01_21-57-12.png)
-![](/img/Snipaste_2025-12-01_21-57-34.png)
-![](/img/Snipaste_2025-12-01_21-57-48.png)
+![](/img/Snipaste_2026-07-14_12-11-52.png)
+![](/img/Snipaste_2026-07-14_12-12-14.png)
+![](/img/Snipaste_2026-07-14_12-12-23.png)
+![](/img/Snipaste_2026-07-14_12-13-23.png)
+![](/img/Snipaste_2026-07-14_12-13-33.png)
+![](/img/Snipaste_2026-07-14_12-13-41.png)
 
 # 五、鸣谢
 
