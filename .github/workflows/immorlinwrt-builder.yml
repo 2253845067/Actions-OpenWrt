@@ -97,6 +97,14 @@ jobs:
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P2_SH
 
+    - name: 缓存 OpenWrt 工具链
+      uses: stupidloud/cachewrtbuild@main
+      with:
+        prefix: openwrt
+        mixkey: immortalwrt-rockchip-armv8
+        toolchain: true
+        ccache: false
+
     - name: 下载软件包
       id: package
       run: |
