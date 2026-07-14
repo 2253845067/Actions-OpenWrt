@@ -29,10 +29,12 @@ sh /bin/install_fan_control.sh
 
 ## 默认配置
 
-- IP: `http://192.168.1.1`
+- IP: `http://192.168.10.1`
 - 用户名: `root`
-- 密码: `password`
+- 密码: 无
 - 北京时间每天 `2:00` 定时编译
+- WiFi 名称: `ImmortalWrt`
+- WiFi 密码: 无
 
 # 四、展示
 
