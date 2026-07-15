@@ -106,11 +106,6 @@ jobs:
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
 
-    - name: 准备内核旧配置
-      run: |
-        cd openwrt
-        yes "" | make kernel_oldconfig
-
     - name: 缓存 OpenWrt 工具链和 ccache
       uses: stupidloud/cachewrtbuild@main
       with:
