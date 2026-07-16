@@ -165,7 +165,28 @@ jobs:
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       run: |
         echo "release_tag=immorlinwrt-$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
-        touch release.txt
+        DEVICE="${DEVICE_NAME#_}"
+        {
+          echo "## 固件信息"
+          echo "- 设备: ${DEVICE:-未知}"
+          echo "- 编译时间: $(date +"%Y-%m-%d %H:%M %Z")"
+          echo "- 源码: immortalwrt/master"
+          echo ""
+          echo "## 默认配置"
+          echo "- 管理地址: http://192.168.10.1"
+          echo "- 用户名: root"
+          echo "- 密码: 无"
+          echo "- WiFi 名称: ImmortalWrt"
+          echo "- WiFi 密码: 无"
+          echo ""
+          echo "## 风扇控制（刷机后执行一次）"
+          echo '```bash'
+          echo 'sh /bin/install_fan_control.sh'
+          echo '```'
+          echo ""
+          echo "---"
+          echo "完整更新日志见下方 commit 列表。"
+        } > release.txt
         echo "status=success" >> $GITHUB_OUTPUT
 
     - name: 上传固件到 Release
