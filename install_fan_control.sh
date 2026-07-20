@@ -977,8 +977,8 @@ const sensors = [
     { id: "cpu_temp", name: "CPU温度", unit: "\u2103", icon: "\uD83D\uDD25", type: "temp" },
     { id: "wifi5_temp", name: "5GHz WiFi", unit: "\u2103", icon: "\uD83D\uDCF6", type: "temp" },
     { id: "wifi2_temp", name: "2.4GHz WiFi", unit: "\u2103", icon: "\uD83D\uDCF1", type: "temp" },
-    { id: "ssd_temp", name: "SSD温度", unit: "\u2103", icon: "\uD83D\uDCBD", type: "temp" },
     { id: "modem_temp", name: "5G模组温度", unit: "\u2103", icon: "\uD83D\uDCF6", type: "temp" },
+    { id: "ssd_temp", name: "SSD温度", unit: "\u2103", icon: "\uD83D\uDCBD", type: "temp", optional: true },
     { id: "max_temp", name: "最高温度", unit: "\u2103", icon: "\uD83D\uDCC8", type: "temp", class: "max-temp-card" },
     { id: "fan_percent", name: "风扇转速", unit: "%", icon: "\uD83C\uDF00", type: "fan", class: "fan-card" }
 ];
@@ -994,6 +994,7 @@ function initCards() {
         const card = document.createElement('div');
         card.className = 'sensor-card ' + (sensor.class || '');
         card.id = 'card-' + sensor.id;
+        if (sensor.optional) card.style.display = 'none';
         if (sensor.type === 'fan') {
             card.innerHTML = '<div class="card-header"><div class="card-icon">' + sensor.icon + '</div><div class="card-title">' + sensor.name + '</div></div>' +
                 '<div class="card-value-container"><canvas class="chart-bg" id="chart-' + sensor.id + '"></canvas><div class="card-value">--</div></div>' +
@@ -1146,6 +1147,11 @@ function updateCards(data) {
         var value = data[sensor.id] || 'N/A';
         var card = document.getElementById('card-' + sensor.id);
         if (!card) return;
+        if (sensor.optional) {
+            var hasValue = String(value).trim().toUpperCase() !== 'N/A';
+            card.style.display = hasValue ? '' : 'none';
+            if (!hasValue) return;
+        }
         var valueEl = card.querySelector('.card-value');
         if (value !== 'N/A') {
             if (sensor.type === 'fan') {
