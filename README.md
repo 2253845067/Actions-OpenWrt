@@ -16,16 +16,13 @@
 
 ## 功能特性
 
+- 添加风扇控制（LuCI -> 状态 -> 硬件监控）
 - 添加5G模块管理插件（QWRT模组管理）
 - 添加以下主要插件
   - OpenClash
   - Docker
   - ZeroTier
-- 添加风扇控制安装脚本
-
-```bash
-sh /bin/install_fan_control.sh
-```
+  - Bandix
 
 ## 默认配置
 
@@ -42,8 +39,9 @@ sh /bin/install_fan_control.sh
 ![](/img/Snipaste_2026-07-14_12-12-14.png)
 ![](/img/Snipaste_2026-07-14_12-12-23.png)
 ![](/img/Snipaste_2026-07-14_12-13-23.png)
-![](/img/Snipaste_2026-07-14_12-13-33.png)
+![](/img/Snipaste_2026-07-20_18-03-06.png)
 ![](/img/Snipaste_2026-07-14_12-13-41.png)
+![](/img/Snipaste_2026-07-20_18-03-31.png)
 
 # 五、鸣谢
 
