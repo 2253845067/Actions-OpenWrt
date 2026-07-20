@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Cyber 3588 AIB 风扇控制安装脚本 V3.0
+# Cyber 3588 AIB 风扇控制安装脚本 V1.0
 
 # ==================== 清理旧版本 ====================
 echo "清理旧版本文件..."
@@ -951,7 +951,7 @@ cat << 'INNER_EOF' > /usr/lib/lua/luci/view/sensors_monitor.htm
 </style>
 
 <div class="cbi-map">
-    <h2 name="content"><%:硬件状态监控 V3.0%></h2>
+    <h2 name="content"><%:硬件状态监控 V1.0%></h2>
     <div class="cbi-map-descr"><%:实时设备传感器数据 - 每秒自动刷新%></div>
     <div class="sensors-container" id="sensors-container">
         <div class="sensor-card">
@@ -1347,7 +1347,7 @@ sleep 1
 /etc/init.d/uhttpd restart
 
 echo "=============================================="
-echo " Cyber 3588 AIB 温度监控和风扇控制 V3.0"
+echo " Cyber 3588 AIB 温度监控和风扇控制 V1.0"
 echo "----------------------------------------------"
 echo " 控制后端可在网页切换:"
 echo "  - DTS内核控制: 保留 pwm_fan，按 DTS thermal trip 自动调速，网页只读显示"

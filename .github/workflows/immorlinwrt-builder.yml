@@ -179,7 +179,7 @@ jobs:
           echo "- WiFi 名称: ImmortalWrt"
           echo "- WiFi 密码: 无"
           echo ""
-          echo "## 风扇控制（刷机后执行一次）"
+          echo "## 风扇控制（状态 -> 硬件监控 没有的话执行一次）"
           echo '```bash'
           echo 'sh /bin/install_fan_control.sh'
           echo '```'
