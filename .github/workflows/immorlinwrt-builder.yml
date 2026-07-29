@@ -192,7 +192,9 @@ jobs:
       with:
         tag_name: ${{ steps.tag.outputs.release_tag }}
         body_path: release.txt
-        files: ${{ env.FIRMWARE }}/*
+        files: |
+          ${{ env.FIRMWARE }}/*
+          openwrt/.config
 
     - name: 删除旧工作流记录
       uses: Mattraks/delete-workflow-runs@main
