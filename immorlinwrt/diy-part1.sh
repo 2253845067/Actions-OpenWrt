@@ -18,6 +18,9 @@
 # 添加 QModem 软件源
 echo 'src-git qmodem https://github.com/FUjr/QModem.git;main' >> feeds.conf.default
 
+# 添加 Nikki 软件源
+echo "src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main" >> "feeds.conf.default"
+
 # 添加主题软件包
 mkdir -p package/yuqi-package/theme
 git clone --depth=1 https://github.com/eamonxg/luci-app-aurora-config.git package/yuqi-package/theme/luci-app-aurora-config
