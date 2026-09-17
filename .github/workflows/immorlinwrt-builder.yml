@@ -150,6 +150,9 @@ jobs:
       run: |
         cd openwrt/bin/targets/*/*
         rm -rf packages
+        # GitHub Releases/softprops can fail while handling a dotfile asset
+        # named ".config". Upload it under a normal filename instead.
+        cp "$GITHUB_WORKSPACE/openwrt/.config" "$PWD/immortalwrt.config"
         echo "FIRMWARE=$PWD" >> $GITHUB_ENV
         echo "status=success" >> $GITHUB_OUTPUT
 
@@ -194,7 +197,6 @@ jobs:
         body_path: release.txt
         files: |
           ${{ env.FIRMWARE }}/*
-          openwrt/.config
 
     - name: 删除旧工作流记录
       uses: Mattraks/delete-workflow-runs@main
