@@ -238,6 +238,8 @@ jobs:
                 ref: `tags/${release.tag_name}`
               });
             } catch (error) {
-              if (error.status !== 404) throw error;
+              // Deleting a release may already remove its auto-created tag,
+              // so deleteRef can return 404 or 422 (Reference does not exist).
+              if (error.status !== 404 && error.status !== 422) throw error;
             }
           }
