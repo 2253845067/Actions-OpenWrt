@@ -102,7 +102,10 @@ jobs:
       run: |
         cd openwrt
         make defconfig
-        make download -j8
+        # make download 的失败会被忽略并不会中断任务，问题会在几十分钟后的
+        # 编译阶段才暴露（例如源码包已从上游删除）。这里并行下载失败后
+        # 串行重试一次并输出详细日志，让下载问题在 2 分钟内暴露出来。
+        make download -j8 || make download -j1 V=s
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
 
