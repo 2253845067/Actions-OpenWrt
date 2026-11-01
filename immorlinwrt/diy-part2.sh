@@ -36,5 +36,34 @@ if [ -f "$FAN_SCRIPT" ]; then
     chmod +x files/bin/install_fan_control.sh
 fi
 
+# 修复 QModem 内置 ndisc6 的源码地址。
+# 上游 remlab.net 已删除 ndisc6 1.0.2（返回 410 Gone），而 OpenWrt/ImmortalWrt
+# 的源码镜像里也没有这个文件，于是 make download 与编译阶段都会下载失败，
+# 导致整次构建中断。这里升级到上游仍在提供的 1.0.8，并同步校验值。
+NDISC6_DIR="feeds/qmodem/application/ndisc6"
+if [ -f "$NDISC6_DIR/Makefile" ]; then
+    if grep -q '^PKG_VERSION:=1\.0\.2$' "$NDISC6_DIR/Makefile"; then
+        sed -i \
+            -e 's|^PKG_VERSION:=1\.0\.2$|PKG_VERSION:=1.0.8|' \
+            -e 's|^PKG_SOURCE_URL:=http://www\.remlab\.net/files/ndisc6$|PKG_SOURCE_URL:=https://www.remlab.net/files/ndisc6/|' \
+            -e 's|^PKG_MD5SUM:=50cb4c19606cf6ff2b7388e71832f579$|PKG_HASH:=1f2fb2dc1172770aa5a09d39738a44d8b753cc5e2e25e306ca78682f9fea0b4f|' \
+            "$NDISC6_DIR/Makefile"
+        # 这两个补丁只适用于 1.0.2：1.0.8 已重写 traceroute 代码，
+        # 且 rdnssd/ 目录改名为 rdnss/，补丁无法应用。
+        rm -f "$NDISC6_DIR/patches/100-favor_bsd.patch" \
+              "$NDISC6_DIR/patches/110-strverscmp.patch"
+        echo "qmodem: ndisc6 已升级到 1.0.8（上游已删除 1.0.2 源码包）"
+    fi
+
+    # 关闭 NLS，避免依赖 target 侧的 gettext/intl 支持
+    if ! grep -q '^CONFIGURE_ARGS += --disable-nls$' "$NDISC6_DIR/Makefile"; then
+        # Makefile 末尾可能没有换行符，先补齐再追加，避免与最后一行粘连
+        if [ -n "$(tail -c 1 "$NDISC6_DIR/Makefile")" ]; then
+            echo >> "$NDISC6_DIR/Makefile"
+        fi
+        echo 'CONFIGURE_ARGS += --disable-nls' >> "$NDISC6_DIR/Makefile"
+    fi
+fi
+
 # qmodem强制安装以覆盖现有的驱动程序/应用
 ./scripts/feeds install -a -f -p qmodem
