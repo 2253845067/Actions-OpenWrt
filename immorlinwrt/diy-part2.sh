@@ -48,6 +48,11 @@ if [ -f "$NDISC6_DIR/Makefile" ]; then
             -e 's|^PKG_SOURCE_URL:=http://www\.remlab\.net/files/ndisc6$|PKG_SOURCE_URL:=https://www.remlab.net/files/ndisc6/|' \
             -e 's|^PKG_MD5SUM:=50cb4c19606cf6ff2b7388e71832f579$|PKG_HASH:=1f2fb2dc1172770aa5a09d39738a44d8b753cc5e2e25e306ca78682f9fea0b4f|' \
             "$NDISC6_DIR/Makefile"
+        # 1.0.8 用 C11 的 alignas()（src/trace-*.c），而 QModem 的 Makefile
+        # 强制 -std=c99：musl 的 <stdalign.h> 在 C99 下把 alignas 展开成
+        # __attribute__((aligned(struct tcphdr)))，报
+        # "expected expression before 'struct'"，因此改用 gnu11。
+        sed -i 's|^TARGET_CFLAGS += -std=c99$|TARGET_CFLAGS += -std=gnu11|' "$NDISC6_DIR/Makefile"
         # 这两个补丁只适用于 1.0.2：1.0.8 已重写 traceroute 代码，
         # 且 rdnssd/ 目录改名为 rdnss/，补丁无法应用。
         rm -f "$NDISC6_DIR/patches/100-favor_bsd.patch" \
